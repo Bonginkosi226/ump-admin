@@ -1,0 +1,62 @@
+.layout {
+  display: flex;
+  min-height: 100vh;
+  position: relative;
+}
+
+.main-content {
+  flex: 1;
+  margin-left: 250px;
+  background: #f8fafc;
+  min-height: 100vh;
+  transition: margin-left 0.3s ease;
+}
+
+.mobile-menu-btn {
+  display: none;
+  position: fixed;
+  top: 20px;
+  left: 20px;
+  z-index: 1001;
+  background: #1e40af;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 12px;
+  cursor: pointer;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s ease;
+}
+
+.mobile-menu-btn:hover {
+  background: #1e3a8a;
+  transform: scale(1.05);
+}
+
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 999;
+}
+
+@media (max-width: 768px) {
+  .main-content {
+    margin-left: 0;
+    padding-top: 70px;
+  }
+  
+  .mobile-menu-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  .sidebar-overlay {
+    display: block;
+  }
+}

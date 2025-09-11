@@ -1,0 +1,191 @@
+.login-container {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 50%, #60a5fa 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.login-card {
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 20px;
+  padding: 40px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+  text-align: center;
+  max-width: 400px;
+  width: 100%;
+}
+
+.logo-section {
+  margin-bottom: 40px;
+}
+
+.university-logo {
+  margin-bottom: 20px;
+}
+
+.logo-shield {
+  width: 80px;
+  height: 80px;
+  margin: 0 auto 20px;
+  position: relative;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 3px solid #1e3a8a;
+}
+
+.shield-quarter {
+  position: absolute;
+  width: 50%;
+  height: 50%;
+}
+
+.shield-quarter.yellow {
+  top: 0;
+  left: 0;
+  background: #fbbf24;
+}
+
+.shield-quarter.red {
+  top: 0;
+  right: 0;
+  background: #ef4444;
+}
+
+.shield-quarter.green {
+  bottom: 0;
+  left: 0;
+  background: #10b981;
+}
+
+.shield-quarter.blue {
+  bottom: 0;
+  right: 0;
+  background: #3b82f6;
+}
+
+.university-name {
+  font-size: 18px;
+  font-weight: bold;
+  color: #1e3a8a;
+  margin: 0 0 20px 0;
+  line-height: 1.2;
+}
+
+.admin-section h2 {
+  font-size: 32px;
+  font-weight: bold;
+  color: #1e3a8a;
+  margin: 0;
+}
+
+.admin-section p {
+  font-size: 14px;
+  color: #64748b;
+  margin: 5px 0 0 0;
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.input-group {
+  position: relative;
+}
+
+.login-input {
+  width: 100%;
+  padding: 15px 20px;
+  border: 2px solid rgba(59, 130, 246, 0.3);
+  border-radius: 10px;
+  font-size: 14px;
+  background: rgba(255, 255, 255, 0.8);
+  color: #1e3a8a;
+  transition: all 0.3s ease;
+  box-sizing: border-box;
+}
+
+.login-input::placeholder {
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.login-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  background: white;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.login-button {
+  background: #3b82f6;
+  color: white;
+  border: none;
+  padding: 15px 30px;
+  border-radius: 10px;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  margin-top: 10px;
+}
+
+.login-button:hover {
+  background: #2563eb;
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(59, 130, 246, 0.3);
+}
+
+.error-message {
+  background: #fee2e2;
+  color: #dc2626;
+  padding: 12px;
+  border-radius: 8px;
+  font-size: 14px;
+  text-align: center;
+  margin-bottom: 20px;
+  border: 1px solid #fecaca;
+}
+
+.admin-notice {
+  margin-top: 20px;
+}
+
+.admin-notice p {
+  color: #64748b;
+  font-size: 12px;
+  text-align: center;
+  margin: 0;
+  font-style: italic;
+}
+
+.login-button:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.login-input:disabled {
+  background: #f3f4f6;
+  color: #6b7280;
+  cursor: not-allowed;
+}
+
+@media (max-width: 480px) {
+  .login-card {
+    padding: 30px 20px;
+    margin: 10px;
+  }
+  
+  .university-name {
+    font-size: 16px;
+  }
+  
+  .admin-section h2 {
+    font-size: 28px;
+  }
+}
