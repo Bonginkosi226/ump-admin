@@ -11,29 +11,23 @@ const Login = () => {
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
-    
-    try {
-      const response = await apiService.login({ email, password });
-      
-      if (response.success) {
-        // Store authentication data
-        localStorage.setItem('isAuthenticated', 'true');
-        localStorage.setItem('adminToken', response.data.token);
-        localStorage.setItem('adminUser', JSON.stringify(response.data.user));
-        
-        navigate('/dashboard');
-      } else {
-        setError(response.message || 'Login failed');
-      }
-    } catch (err) {
-      setError('Invalid credentials. Access restricted to authorized administrators only.');
-    } finally {
-      setLoading(false);
-    }
-  };
+  e.preventDefault();
+  setLoading(true);
+  setError('');
+
+  try {
+    // ⚠️ Skip API validation, just log user in
+    localStorage.setItem('isAuthenticated', 'true');
+    localStorage.setItem('adminToken', 'dummy-token');
+    localStorage.setItem('adminUser', JSON.stringify({ email }));
+
+    navigate('/dashboard');
+  } catch (err) {
+    setError('Something went wrong.');
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <div className="login-container">

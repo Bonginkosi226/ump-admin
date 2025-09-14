@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Buildings from './pages/Buildings';
+import UploadPage from './pages/Upload_image';
 import Paths from './pages/Paths';
 import MapPreview from './pages/MapPreview';
 import Settings from './pages/Settings';
@@ -37,6 +38,7 @@ function App() {
             <Route path="personal-info" element={<PersonalInfo />} />
             <Route path="security-settings" element={<SecuritySettings />} />
             <Route path="notifications" element={<Notifications />} />
+            <Route path="upload-image" element={<UploadPage />} />
           </Route>
         </Routes>
       </div>

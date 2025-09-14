@@ -1,18 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from 'recharts';
 import { Building, Users, MapPin, Plus, AlertCircle } from 'lucide-react';
-import apiService from '../services/api';
 import './Dashboard.css';
 
 const Dashboard = () => {
-  const [dashboardData, setDashboardData] = useState(null);
+  const [buildings, setBuildings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Fallback static data
+  // Fallback static data for other stats (since we only have buildings endpoint)
   const fallbackStatsData = [
-    { title: 'Total Buildings', value: '20', icon: Building, color: 'orange' },
-    { title: 'New Buildings', value: '2', icon: Plus, color: 'orange' },
+    { title: 'Total Buildings', value: '0', icon: Building, color: 'orange' },
+    { title: 'New Buildings', value: '0', icon: Plus, color: 'orange' },
     { title: 'Total Paths', value: '57', icon: MapPin, color: 'orange' },
     { title: 'Total Users', value: '324', icon: Users, color: 'orange' }
   ];
@@ -29,45 +28,77 @@ const Dashboard = () => {
   ];
 
   useEffect(() => {
-    const fetchDashboardData = async () => {
+    const fetchBuildings = async () => {
       try {
         setLoading(true);
         setError(null);
         
-        // Try to fetch from API first
-        const [overviewData, quickStats] = await Promise.all([
-          apiService.getDashboardOverview().catch(() => null),
-          apiService.getQuickStats().catch(() => null)
-        ]);
+        // Fetch buildings directly from your API endpoint
+        const response = await fetch('https://campus-api-cuut.vercel.app/api/buildings');
         
-        if (overviewData && quickStats) {
-          setDashboardData({ overview: overviewData, quickStats });
-        } else {
-          // Use fallback data if API is not available
-          console.warn('API not available, using fallback data');
-          setDashboardData(null);
+        if (!response.ok) {
+          throw new Error('Failed to fetch buildings');
         }
+        
+        const buildingsData = await response.json();
+        setBuildings(buildingsData);
+        
       } catch (err) {
-        console.error('Error fetching dashboard data:', err);
-        setError('Failed to load dashboard data');
-        setDashboardData(null);
+        console.error('Error fetching buildings:', err);
+        setError('Failed to load buildings data');
+        setBuildings([]);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchDashboardData();
+    fetchBuildings();
   }, []);
 
-  // Use API data if available, otherwise use fallback
-  const statsData = dashboardData?.quickStats?.data ? [
-    { title: 'Total Buildings', value: dashboardData.quickStats.data.buildings?.total?.toString() || '0', icon: Building, color: 'orange' },
-    { title: 'Active Buildings', value: dashboardData.quickStats.data.buildings?.total?.toString() || '0', icon: Plus, color: 'orange' },
-    { title: 'Total Paths', value: dashboardData.quickStats.data.paths?.total?.toString() || '0', icon: MapPin, color: 'orange' },
-    { title: 'Total Users', value: dashboardData.quickStats.data.users?.total?.toString() || '0', icon: Users, color: 'orange' }
-  ] : fallbackStatsData;
+  // Calculate real stats from the buildings data
+  const statsData = [
+    { 
+      title: 'Total Buildings', 
+      value: buildings.length.toString(), 
+      icon: Building, 
+      color: 'orange' 
+    },
+    { 
+      title: 'New Buildings', 
+      value: buildings.filter(b => {
+        // Simple heuristic: if building has recent data or specific pattern
+        return b.name?.includes('New') || b.description?.includes('new') ? 1 : 0;
+      }).length.toString(), 
+      icon: Plus, 
+      color: 'orange' 
+    },
+    { 
+      title: 'Residential Buildings', 
+      value: buildings.filter(b => 
+        b.description?.toLowerCase().includes('res') || 
+        b.name?.toLowerCase().includes('block') ||
+        b.name?.toLowerCase().includes('onderberg') ||
+        b.name?.toLowerCase().includes('letaba') ||
+        b.name?.toLowerCase().includes('loskop')
+      ).length.toString(), 
+      icon: MapPin, 
+      color: 'orange' 
+    },
+    { 
+      title: 'Academic Buildings', 
+      value: buildings.filter(b => 
+        b.description?.toLowerCase().includes('lecture') || 
+        b.description?.toLowerCase().includes('academic') ||
+        b.description?.toLowerCase().includes('teaching') ||
+        b.name?.toLowerCase().includes('building 5') ||
+        b.name?.toLowerCase().includes('library')
+      ).length.toString(), 
+      icon: Users, 
+      color: 'orange' 
+    }
+  ];
 
-  const chartData = dashboardData?.overview?.data?.userGrowth || fallbackChartData;
+  const chartData = fallbackChartData;
 
   if (loading) {
     return (
@@ -104,11 +135,9 @@ const Dashboard = () => {
     <div className="dashboard">
       <div className="dashboard-header">
         <h1>Dashboard</h1>
-        {!dashboardData && (
-          <div className="fallback-notice">
-            <small>Using offline data - API unavailable</small>
-          </div>
-        )}
+        <div className="api-status">
+          <small>Connected to live API - {buildings.length} buildings loaded</small>
+        </div>
       </div>
 
       <div className="stats-grid">
@@ -131,13 +160,17 @@ const Dashboard = () => {
       <div className="dashboard-content">
         <div className="analytics-section">
           <div className="chart-container">
-            <h3>Users</h3>
-            <div className="chart-period">Yearly ▼</div>
+            <h3>Building Distribution</h3>
+            <div className="chart-period">Real-time data</div>
             <ResponsiveContainer width="100%" height={200}>
-              <AreaChart data={chartData}>
+              <AreaChart data={[
+                { category: 'Residential', count: parseInt(statsData[2].value) },
+                { category: 'Academic', count: parseInt(statsData[3].value) },
+                { category: 'Other', count: buildings.length - parseInt(statsData[2].value) - parseInt(statsData[3].value) }
+              ]}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                 <XAxis 
-                  dataKey="year" 
+                  dataKey="category" 
                   axisLine={false}
                   tickLine={false}
                   tick={{ fontSize: 12, fill: '#64748b' }}
@@ -149,7 +182,7 @@ const Dashboard = () => {
                 />
                 <Area 
                   type="monotone" 
-                  dataKey="users" 
+                  dataKey="count" 
                   stroke="#10b981" 
                   fill="#10b981"
                   fillOpacity={0.3}
@@ -161,20 +194,34 @@ const Dashboard = () => {
 
           <div className="stats-summary">
             <div className="summary-item">
-              <h4>Top month</h4>
-              <div className="summary-value">November</div>
-              <div className="summary-detail">2018</div>
+              <h4>Total Buildings</h4>
+              <div className="summary-value">{buildings.length}</div>
+              <div className="summary-detail">Live from API</div>
             </div>
             <div className="summary-item">
-              <h4>Top year</h4>
-              <div className="summary-value">2023</div>
-              <div className="summary-detail">96K Users in total</div>
+              <h4>Residential</h4>
+              <div className="summary-value">{statsData[2].value}</div>
+              <div className="summary-detail">Dormitories & Housing</div>
             </div>
             <div className="summary-item">
-              <h4>Most active group</h4>
-              <div className="summary-value">Male: 18 → 25</div>
-              <div className="summary-detail">Mostly active during the day</div>
+              <h4>Academic</h4>
+              <div className="summary-value">{statsData[3].value}</div>
+              <div className="summary-detail">Lecture halls & Offices</div>
             </div>
+          </div>
+        </div>
+
+        {/* Building List Preview */}
+        <div className="buildings-preview">
+          <h3>Recent Buildings</h3>
+          <div className="buildings-list">
+            {buildings.slice(0, 5).map((building) => (
+              <div key={building._id} className="building-preview-item">
+                <div className="building-preview-name">{building.name}</div>
+                <div className="building-preview-desc">{building.description}</div>
+                <div className="building-preview-distance">{building.distance}</div>
+              </div>
+            ))}
           </div>
         </div>
       </div>

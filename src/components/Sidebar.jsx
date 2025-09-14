@@ -42,7 +42,7 @@ const Sidebar = ({ isOpen, onClose }) => {
       icon: Settings,
       label: 'Settings',
       path: '/settings'
-    }
+    },
   ];
 
   return (

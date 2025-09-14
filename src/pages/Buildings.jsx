@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import apiService from '../services/api';
 import './Buildings.css';
 
 const Buildings = () => {
@@ -12,52 +11,15 @@ const Buildings = () => {
   const [editFormData, setEditFormData] = useState({});
   const [addFormData, setAddFormData] = useState({
     name: '',
-    location: '',
     description: '',
-    buildingType: 'food',
-    facilities: ['toilet', 'wifi'],
-    images: []
+    distance: '',
+    contact: '',
+    operatingHours: '8:00 AM - 5:00 PM',
+    icon: null
   });
   const [buildings, setBuildings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-
-  // Fallback static data
-  const fallbackBuildings = [
-
-    {
-      id: '01',
-      name: 'Building 10',
-      type: 'General Enquiries',
-      locations: 3,
-      paths: 12,
-      lastUpdate: '12-04-2025 | 15:24'
-    },
-    {
-      id: '02',
-      name: 'Building 7',
-      type: 'Multipurpose Hall',
-      locations: 6,
-      paths: 9,
-      lastUpdate: '12-04-2025 | 15:24'
-    },
-    {
-      id: '03',
-      name: 'Building 6',
-      type: 'Lecture Hall',
-      locations: 4,
-      paths: 23,
-      lastUpdate: '12-04-2025 | 15:24'
-    },
-    {
-      id: '04',
-      name: 'Old Gate',
-      type: 'Entrance',
-      locations: 1,
-      paths: 16,
-      lastUpdate: '12-04-2025 | 15:24'
-    }
-  ];
 
   useEffect(() => {
     const fetchBuildings = async () => {
@@ -65,17 +27,35 @@ const Buildings = () => {
         setLoading(true);
         setError(null);
         
-        const response = await apiService.getBuildings();
-        if (response.success && response.data) {
-          setBuildings(response.data);
-        } else {
-          console.warn('API not available, using fallback data');
-          setBuildings(fallbackBuildings);
+        const buildingsResponse = await fetch('https://campus-api-cuut.vercel.app/api/buildings');
+        if (!buildingsResponse.ok) {
+            throw new Error(`Failed to fetch buildings: ${buildingsResponse.statusText}`);
         }
+        let buildingsData = await buildingsResponse.json();
+
+        try {
+            const linksResponse = await fetch('https://campus-api-cuut.vercel.app/api/links');
+            if (linksResponse.ok) {
+                const linksData = await linksResponse.json();
+                if (Array.isArray(linksData)) {
+                    const imageMap = new Map(linksData.filter(l => l.imageurl).map(l => [l.name.toLowerCase(), l.imageurl]));
+                    buildingsData = buildingsData.map(building => ({
+                        ...building,
+                        icon: imageMap.get(building.name.toLowerCase()) || building.icon || null
+                    }));
+                }
+            } else {
+                console.warn('Could not fetch image links, proceeding without building images from that source.');
+            }
+        } catch (e) {
+            console.warn('Error fetching image links, proceeding without building images from that source.', e);
+        }
+
+        setBuildings(buildingsData);
+
       } catch (err) {
-        console.error('Error fetching buildings:', err);
-        setError('Failed to load buildings');
-        setBuildings(fallbackBuildings);
+        console.error('Error fetching building data:', err);
+        setError('Failed to load building data from API');
       } finally {
         setLoading(false);
       }
@@ -87,12 +67,13 @@ const Buildings = () => {
   const handleEdit = (building) => {
     setSelectedBuilding(building);
     setEditFormData({
-      name: building.name,
-      type: building.type,
-      description: '',
-      location: '',
-      buildingType: building.type.toLowerCase().replace(' ', ''),
-      facilities: ['toilet', 'wifi']
+      name: building.name || '',
+      description: building.description || '',
+      distance: building.distance || '',
+      contact: building.contact || '',
+      operatingHours: building.operatingHours || building.hours || '8:00 AM - 5:00 PM',
+      icon: building.icon || null,
+      iconFile: null
     });
     setShowEditModal(true);
   };
@@ -103,217 +84,127 @@ const Buildings = () => {
   };
 
   const confirmDelete = async () => {
-    try {
-      const response = await apiService.deleteBuilding(selectedBuilding.id);
-      if (response.success) {
-        setBuildings(buildings.filter(b => b.id !== selectedBuilding.id));
-      } else {
-        // Fallback to local deletion if API fails
-        setBuildings(buildings.filter(b => b.id !== selectedBuilding.id));
-      }
-    } catch (err) {
-      console.error('Error deleting building:', err);
-      // Fallback to local deletion
-      setBuildings(buildings.filter(b => b.id !== selectedBuilding.id));
-    }
+    // For now, just remove from local state
+    setBuildings(buildings.filter(b => b._id !== selectedBuilding._id));
     setShowDeleteModal(false);
     setSelectedBuilding(null);
   };
 
   const handleEditSubmit = async (e) => {
     e.preventDefault();
-    try {
-      const updateData = {
-        name: editFormData.name,
-        type: editFormData.type,
-        description: editFormData.description || '',
-        location: editFormData.location || '',
-        buildingType: editFormData.buildingType || editFormData.type.toLowerCase().replace(' ', ''),
-        facilities: editFormData.facilities || []
-      };
-      
-      const response = await apiService.updateBuilding(selectedBuilding.id, updateData);
-      
-      const updatedBuildings = buildings.map(building => 
-        building.id === selectedBuilding.id 
-          ? { 
-              ...building, 
-              name: editFormData.name,
-              type: editFormData.type,
-              lastUpdate: new Date().toLocaleDateString('en-GB') + ' | ' + new Date().toLocaleTimeString('en-GB', { hour12: false, hour: '2-digit', minute: '2-digit' })
+    // Update local state only for now
+    const updatedBuildings = buildings.map(building => {
+        if (building._id === selectedBuilding._id) {
+            let iconUrl = editFormData.icon;
+            if (editFormData.iconFile) {
+                iconUrl = URL.createObjectURL(editFormData.iconFile);
             }
-          : building
-      );
-      setBuildings(updatedBuildings);
-    } catch (err) {
-      console.error('Error updating building:', err);
-      // Fallback to local update
-      const updatedBuildings = buildings.map(building => 
-        building.id === selectedBuilding.id 
-          ? { 
-              ...building, 
-              name: editFormData.name,
-              type: editFormData.type,
-              lastUpdate: new Date().toLocaleDateString('en-GB') + ' | ' + new Date().toLocaleTimeString('en-GB', { hour12: false, hour: '2-digit', minute: '2-digit' })
-            }
-          : building
-      );
-      setBuildings(updatedBuildings);
-    }
+            return { 
+                ...building, 
+                name: editFormData.name,
+                description: editFormData.description,
+                distance: editFormData.distance,
+                contact: editFormData.contact,
+                operatingHours: editFormData.operatingHours,
+                icon: iconUrl
+            };
+        }
+        return building;
+    });
+    setBuildings(updatedBuildings);
     setShowEditModal(false);
     setSelectedBuilding(null);
   };
 
   const handleEditInputChange = (e) => {
-    const { name, value } = e.target;
-    setEditFormData(prev => ({ ...prev, [name]: value }));
+    const { name, value, files } = e.target;
+    if (name === 'icon') {
+        setEditFormData(prev => ({ ...prev, iconFile: files[0] }));
+    } else {
+        setEditFormData(prev => ({ ...prev, [name]: value }));
+    }
   };
 
   const handleAddInputChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    
-    if (type === 'checkbox') {
-      const facility = value;
-      setAddFormData(prev => ({
-        ...prev,
-        facilities: checked 
-          ? [...prev.facilities, facility]
-          : prev.facilities.filter(f => f !== facility)
-      }));
+    const { name, value, files } = e.target;
+    if (name === 'icon') {
+        setAddFormData(prev => ({ ...prev, icon: files[0] }));
     } else {
-      setAddFormData(prev => ({ ...prev, [name]: value }));
+        setAddFormData(prev => ({ ...prev, [name]: value }));
     }
-  };
-
-  const handleImageUpload = (e) => {
-    const files = Array.from(e.target.files);
-    const maxImages = 5;
-    
-    if (addFormData.images.length + files.length > maxImages) {
-      alert(`You can only upload up to ${maxImages} images.`);
-      return;
-    }
-    
-    files.forEach(file => {
-      if (file.type.startsWith('image/')) {
-        const reader = new FileReader();
-        reader.onload = (event) => {
-          const imageData = {
-            id: Date.now() + Math.random(),
-            file: file,
-            preview: event.target.result,
-            name: file.name
-          };
-          setAddFormData(prev => ({
-            ...prev,
-            images: [...prev.images, imageData]
-          }));
-        };
-        reader.readAsDataURL(file);
-      } else {
-        alert('Please select only image files.');
-      }
-    });
-  };
-
-  const handleRemoveImage = (imageId) => {
-    setAddFormData(prev => ({
-      ...prev,
-      images: prev.images.filter(img => img.id !== imageId)
-    }));
-  };
-
-  const triggerImageUpload = () => {
-    document.getElementById('imageUpload').click();
   };
 
   const handleAddSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      // Generate a unique building code
-      const codePrefix = addFormData.name.substring(0, 3).toUpperCase().replace(/[^A-Z]/g, 'X');
-      const codeNumber = Math.floor(Math.random() * 100).toString().padStart(2, '0');
-      const buildingCode = codePrefix + codeNumber;
-      
-      const newBuilding = {
-        name: addFormData.name,
-        code: buildingCode,
-        type: addFormData.buildingType === 'food' ? 'Other' : 
-              addFormData.buildingType === 'general' ? 'Administrative' :
-              addFormData.buildingType === 'offices' ? 'Administrative' :
-              addFormData.buildingType === 'lecture' ? 'Academic' :
-              addFormData.buildingType === 'library' ? 'Library' : 'Other',
-        description: addFormData.description,
-        location: {
-          coordinates: {
-            latitude: -25.4753,
-            longitude: 30.9756
-          },
-          address: addFormData.location || 'University of Mpumalanga, Nelspruit',
-          campus: 'Main Campus'
-        },
-        floors: 1,
-        capacity: 100,
-        facilities: addFormData.facilities.map(f => ({
-          name: f.charAt(0).toUpperCase() + f.slice(1),
-          type: 'Other',
-          floor: 1,
-          capacity: 50
-        })),
-        status: 'Active'
-      };
-      
-      const response = await apiService.createBuilding(newBuilding);
-      
-      // Add to local state
-      const buildingForDisplay = {
-        id: Date.now().toString(),
-        name: addFormData.name,
-        type: addFormData.buildingType.charAt(0).toUpperCase() + addFormData.buildingType.slice(1),
-        locations: 1,
-        paths: 0,
-        lastUpdate: new Date().toLocaleDateString('en-GB') + ' | ' + new Date().toLocaleTimeString('en-GB', { hour12: false, hour: '2-digit', minute: '2-digit' })
-      };
-      
-      setBuildings(prev => [...prev, buildingForDisplay]);
-      
-      // Reset form and close modal
-      setAddFormData({
-        name: '',
-        location: '',
-        description: '',
-        buildingType: 'food',
-        facilities: ['toilet', 'wifi'],
-        images: []
+  e.preventDefault();
+
+  try {
+    let imageUrl = null;
+
+    // 1️⃣ Upload image if exists
+    if (addFormData.icon) {
+      const formData = new FormData();
+      formData.append('image', addFormData.icon);
+
+      const uploadRes = await fetch('/api/uploads', {
+        method: 'POST',
+        body: formData,
       });
-      setShowAddModal(false);
-      
-    } catch (err) {
-      console.error('Error creating building:', err);
-      // Fallback to local addition
-      const buildingForDisplay = {
-        id: Date.now().toString(),
-        name: addFormData.name,
-        type: addFormData.buildingType.charAt(0).toUpperCase() + addFormData.buildingType.slice(1),
-        locations: 1,
-        paths: 0,
-        lastUpdate: new Date().toLocaleDateString('en-GB') + ' | ' + new Date().toLocaleTimeString('en-GB', { hour12: false, hour: '2-digit', minute: '2-digit' })
-      };
-      
-      setBuildings(prev => [...prev, buildingForDisplay]);
-      
-      // Reset form and close modal
-      setAddFormData({
-        name: '',
-        location: '',
-        description: '',
-        buildingType: 'food',
-        facilities: ['toilet', 'wifi'],
-        images: []
-      });
-      setShowAddModal(false);
+
+      if (!uploadRes.ok) throw new Error('Image upload failed');
+      const uploadData = await uploadRes.json();
+      imageUrl = uploadData.url;
     }
-  };
+
+    // 2️⃣ Save building info
+    const response = await fetch('/api/buildings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: addFormData.name,
+        description: addFormData.description,
+        distance: addFormData.distance,
+        contact: addFormData.contact,
+        operatingHours: addFormData.operatingHours
+      })
+    });
+
+    if (!response.ok) throw new Error('Failed to create building');
+    const data = await response.json(); // should return new building id
+
+    // 3️⃣ Save image URL in 'links' collection
+    if (imageUrl) {
+      await fetch('/api/links', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: addFormData.name,
+          imageurl: imageUrl
+        })
+      });
+    }
+
+    // 4️⃣ Update state
+    setBuildings(prev => [
+      ...prev,
+      { ...addFormData, _id: data.id, icon: imageUrl }
+    ]);
+
+    // 5️⃣ Reset form & close modal
+    setAddFormData({
+      name: '',
+      description: '',
+      distance: '',
+      contact: '',
+      operatingHours: '8:00 AM - 5:00 PM',
+      icon: null
+    });
+    setShowAddModal(false);
+
+  } catch (err) {
+    console.error('Error creating building:', err);
+  }
+};
+
 
   if (loading) {
     return (
@@ -349,44 +240,42 @@ const Buildings = () => {
     <div className="buildings-page">
       <div className="buildings-header">
         <h1>Buildings</h1>
-        {buildings === fallbackBuildings && (
-          <div className="fallback-notice">
-            <small>Using offline data - API unavailable</small>
-          </div>
-        )}
+        <div className="api-status">
+          <small>Connected to live API</small>
+        </div>
       </div>
 
       <div className="buildings-content">
         <div className="buildings-section">
           <div className="section-header">
             <h2>Buildings</h2>
-            <span className="new-buildings">● 2 new buildings this month</span>
+            <span className="buildings-count">● {buildings.length} buildings total</span>
           </div>
           
           <div className="buildings-table">
             <div className="table-header">
-              <div className="col-id">#</div>
-              <div className="col-building">BUILDING</div>
-              <div className="col-type">BUILDING TYPE</div>
-              <div className="col-locations"># OF LOCATIONS</div>
-              <div className="col-paths"># OF PATHS CONNECTED</div>
-              <div className="col-update">LAST UPDATE</div>
+              <div className="col-name">BUILDING NAME</div>
+              <div className="col-description">DESCRIPTION</div>
+              <div className="col-distance">DISTANCE</div>
+              <div className="col-contact">CONTACT</div>
+              <div className="col-hours">OPERATING HOURS</div>
               <div className="col-action">ACTION</div>
             </div>
             
             {buildings.map((building) => (
-              <div key={building.id} className="table-row">
-                <div className="col-id">{building.id}</div>
-                <div className="col-building">
+              <div key={building._id} className="table-row">
+                <div className="col-name">
                   <div className="building-info">
-                    <div className="building-avatar"></div>
+                    <div className="building-avatar">
+                      {building.icon && <img src={building.icon} alt={building.name} style={{width: '100%', height: '100%', objectFit: 'cover'}} />}
+                    </div>
                     <span>{building.name}</span>
                   </div>
                 </div>
-                <div className="col-type">{building.type}</div>
-                <div className="col-locations">{building.locations}</div>
-                <div className="col-paths">{building.paths}</div>
-                <div className="col-update">{building.lastUpdate}</div>
+                <div className="col-description">{building.description}</div>
+                <div className="col-distance">{building.distance}</div>
+                <div className="col-contact">{building.contact}</div>
+                <div className="col-hours">{building.operatingHours || building.hours}</div>
                 <div className="col-action">
                   <button 
                     className="action-btn edit" 
@@ -413,7 +302,7 @@ const Buildings = () => {
           className="add-building-btn"
           onClick={() => setShowAddModal(true)}
         >
-          ADD
+          ADD NEW BUILDING
         </button>
       </div>
 
@@ -422,176 +311,81 @@ const Buildings = () => {
           <div className="add-building-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h2>🏢 Add Building</h2>
-              <button 
-                className="close-btn"
-                onClick={() => setShowAddModal(false)}
-              >
+              <button className="close-btn" onClick={() => setShowAddModal(false)}>
                 ❌
               </button>
             </div>
             
             <form className="add-building-form" onSubmit={handleAddSubmit}>
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Building</label>
-                  <input 
-                    type="text" 
-                    name="name"
-                    value={addFormData.name}
-                    onChange={handleAddInputChange}
-                    placeholder="Building" 
-                    required
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Building Location (Optional)</label>
-                  <input 
-                    type="text" 
-                    name="location"
-                    value={addFormData.location}
-                    onChange={handleAddInputChange}
-                    placeholder="Building location (Optional)" 
-                  />
-                </div>
+              <div className="form-group">
+                <label>Building Name</label>
+                <input 
+                  type="text" 
+                  name="name"
+                  value={addFormData.name}
+                  onChange={handleAddInputChange}
+                  placeholder="Building name" 
+                  required
+                />
               </div>
               
               <div className="form-group">
-                <label>📝 Describe the building</label>
+                <label>Description</label>
                 <textarea 
                   name="description"
                   value={addFormData.description}
                   onChange={handleAddInputChange}
-                  placeholder="Describe the purpose/function of the building..."
-                  rows="4"
+                  placeholder="Describe the building..."
+                  rows="3"
+                  required
                 ></textarea>
               </div>
               
-              <div className="form-group">
-                <label>Category/Building Type</label>
-                <div className="radio-group">
-                  <label className="radio-option">
-                    <input 
-                      type="radio" 
-                      name="buildingType" 
-                      value="food" 
-                      checked={addFormData.buildingType === 'food'}
-                      onChange={handleAddInputChange}
-                    />
-                    <span>Food</span>
-                  </label>
-                  <label className="radio-option">
-                    <input 
-                      type="radio" 
-                      name="buildingType" 
-                      value="general" 
-                      checked={addFormData.buildingType === 'general'}
-                      onChange={handleAddInputChange}
-                    />
-                    <span>General Enquiries</span>
-                  </label>
-                  <label className="radio-option">
-                    <input 
-                      type="radio" 
-                      name="buildingType" 
-                      value="offices" 
-                      checked={addFormData.buildingType === 'offices'}
-                      onChange={handleAddInputChange}
-                    />
-                    <span>Offices</span>
-                  </label>
-                  <label className="radio-option">
-                    <input 
-                      type="radio" 
-                      name="buildingType" 
-                      value="lecture" 
-                      checked={addFormData.buildingType === 'lecture'}
-                      onChange={handleAddInputChange}
-                    />
-                    <span>Lecture Hall</span>
-                  </label>
-                  <label className="radio-option">
-                    <input 
-                      type="radio" 
-                      name="buildingType" 
-                      value="library" 
-                      checked={addFormData.buildingType === 'library'}
-                      onChange={handleAddInputChange}
-                    />
-                    <span>Library</span>
-                  </label>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Distance</label>
+                  <input 
+                    type="text" 
+                    name="distance"
+                    value={addFormData.distance}
+                    onChange={handleAddInputChange}
+                    placeholder="e.g., 3km" 
+                  />
                 </div>
-              </div>
-              
-              <div className="form-group">
-                <label>Facilities</label>
-                <div className="checkbox-group">
-                  <label className="checkbox-option">
-                    <input 
-                      type="checkbox" 
-                      value="toilet"
-                      checked={addFormData.facilities.includes('toilet')}
-                      onChange={handleAddInputChange}
-                    />
-                    <span>Toilet</span>
-                  </label>
-                  <label className="checkbox-option">
-                    <input 
-                      type="checkbox" 
-                      value="wifi"
-                      checked={addFormData.facilities.includes('wifi')}
-                      onChange={handleAddInputChange}
-                    />
-                    <span>Wifi</span>
-                  </label>
-                  <label className="checkbox-option">
-                    <input 
-                      type="checkbox" 
-                      value="kitchen"
-                      checked={addFormData.facilities.includes('kitchen')}
-                      onChange={handleAddInputChange}
-                    />
-                    <span>Kitchen</span>
-                  </label>
-                </div>
-              </div>
-              
-              <div className="form-group">
-                <label>Images</label>
-                <div className="image-upload">
-                  {addFormData.images.map((image) => (
-                    <div key={image.id} className="image-preview">
-                      <img src={image.preview} alt={image.name} style={{width: '100%', height: '100%', objectFit: 'cover'}} />
-                      <button 
-                        type="button" 
-                        className="remove-image-btn"
-                        onClick={() => handleRemoveImage(image.id)}
-                        title="Remove image"
-                      >
-                        ×
-                      </button>
-                    </div>
-                  ))}
-                  {addFormData.images.length < 5 && (
-                    <>
-                      <div className="image-preview">
-                        <div className="image-placeholder">📷</div>
-                      </div>
-                      <button type="button" className="add-image-btn" onClick={triggerImageUpload}>
-                        📷 Add
-                      </button>
-                    </>
-                  )}
-                  <input
-                    id="imageUpload"
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    onChange={handleImageUpload}
-                    style={{ display: 'none' }}
+                <div className="form-group">
+                  <label>Contact</label>
+                  <input 
+                    type="text" 
+                    name="contact"
+                    value={addFormData.contact}
+                    onChange={handleAddInputChange}
+                    placeholder="e.g., 013 002 000" 
                   />
                 </div>
               </div>
               
+              <div className="form-group">
+                <label>Operating Hours</label>
+                <input 
+                  type="text" 
+                  name="operatingHours"
+                  value={addFormData.operatingHours}
+                  onChange={handleAddInputChange}
+                  placeholder="e.g., 8:00 AM - 5:00 PM" 
+                />
+              </div>
+              
+              <div className="form-group">
+                <label>Building Image</label>
+                {addFormData.icon && <img src={URL.createObjectURL(addFormData.icon)} alt="Preview" style={{width: '100px', height: '100px', objectFit: 'cover', marginBottom: '10px'}}/>}
+                <input
+                    type="file"
+                    name="icon"
+                    onChange={handleAddInputChange}
+                    accept="image/*"
+                />
+              </div>
+
               <div className="form-actions">
                 <button type="button" className="cancel-btn" onClick={() => setShowAddModal(false)}>
                   Cancel
@@ -610,106 +404,87 @@ const Buildings = () => {
           <div className="add-building-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h2>✏️ Edit Building</h2>
-              <button 
-                className="close-btn"
-                onClick={() => setShowEditModal(false)}
-              >
+              <button className="close-btn" onClick={() => setShowEditModal(false)}>
                 ❌
               </button>
             </div>
             
             <form className="add-building-form" onSubmit={handleEditSubmit}>
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Building Name</label>
-                  <input 
-                    type="text" 
-                    name="name"
-                    value={editFormData.name || ''}
-                    onChange={handleEditInputChange}
-                    placeholder="Building Name" 
-                    required
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Building Location (Optional)</label>
-                  <input 
-                    type="text" 
-                    name="location"
-                    value={editFormData.location || ''}
-                    onChange={handleEditInputChange}
-                    placeholder="Building location (Optional)" 
-                  />
-                </div>
+              <div className="form-group">
+                <label>Building Name</label>
+                <input 
+                  type="text" 
+                  name="name"
+                  value={editFormData.name || ''}
+                  onChange={handleEditInputChange}
+                  placeholder="Building name" 
+                  required
+                />
               </div>
               
               <div className="form-group">
-                <label>📝 Describe the building</label>
+                <label>Description</label>
                 <textarea 
                   name="description"
                   value={editFormData.description || ''}
                   onChange={handleEditInputChange}
-                  placeholder="Describe the purpose/function of the building..."
-                  rows="4"
+                  placeholder="Describe the building..."
+                  rows="3"
+                  required
                 ></textarea>
               </div>
               
-              <div className="form-group">
-                <label>Category/Building Type</label>
-                <div className="radio-group">
-                  <label className="radio-option">
-                    <input 
-                      type="radio" 
-                      name="buildingType" 
-                      value="food" 
-                      checked={editFormData.buildingType === 'food'}
-                      onChange={handleEditInputChange}
-                    />
-                    <span>Food</span>
-                  </label>
-                  <label className="radio-option">
-                    <input 
-                      type="radio" 
-                      name="buildingType" 
-                      value="general" 
-                      checked={editFormData.buildingType === 'general'}
-                      onChange={handleEditInputChange}
-                    />
-                    <span>General Enquiries</span>
-                  </label>
-                  <label className="radio-option">
-                    <input 
-                      type="radio" 
-                      name="buildingType" 
-                      value="offices" 
-                      checked={editFormData.buildingType === 'offices'}
-                      onChange={handleEditInputChange}
-                    />
-                    <span>Offices</span>
-                  </label>
-                  <label className="radio-option">
-                    <input 
-                      type="radio" 
-                      name="buildingType" 
-                      value="lecture" 
-                      checked={editFormData.buildingType === 'lecture'}
-                      onChange={handleEditInputChange}
-                    />
-                    <span>Lecture Hall</span>
-                  </label>
-                  <label className="radio-option">
-                    <input 
-                      type="radio" 
-                      name="buildingType" 
-                      value="library" 
-                      checked={editFormData.buildingType === 'library'}
-                      onChange={handleEditInputChange}
-                    />
-                    <span>Library</span>
-                  </label>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Distance</label>
+                  <input 
+                    type="text" 
+                    name="distance"
+                    value={editFormData.distance || ''}
+                    onChange={handleEditInputChange}
+                    placeholder="e.g., 3km" 
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Contact</label>
+                  <input 
+                    type="text" 
+                    name="contact"
+                    value={editFormData.contact || ''}
+                    onChange={handleEditInputChange}
+                    placeholder="e.g., 013 002 000" 
+                  />
                 </div>
               </div>
               
+              <div className="form-group">
+                <label>Operating Hours</label>
+                <input 
+                  type="text" 
+                  name="operatingHours"
+                  value={editFormData.operatingHours || ''}
+                  onChange={handleEditInputChange}
+                  placeholder="e.g., 8:00 AM - 5:00 PM" 
+                />
+              </div>
+              
+              <div className="form-group">
+                <label>Building Image</label>
+                <div>
+                    {editFormData.iconFile ? (
+                        <img src={URL.createObjectURL(editFormData.iconFile)} alt="New preview" style={{width: '100px', height: '100px', objectFit: 'cover', marginBottom: '10px'}}/>
+                    ) : (
+                        editFormData.icon && <img src={editFormData.icon} alt="Current building" style={{width: '100px', height: '100px', objectFit: 'cover', marginBottom: '10px'}}/>
+                    )}
+                </div>
+                <input
+                    type="file"
+                    name="icon"
+                    onChange={handleEditInputChange}
+                    accept="image/*"
+                />
+              </div>
+
               <div className="form-actions">
                 <button type="button" className="cancel-btn" onClick={() => setShowEditModal(false)}>
                   Cancel
@@ -734,16 +509,10 @@ const Buildings = () => {
               <p className="warning-text">This action cannot be undone.</p>
             </div>
             <div className="delete-modal-actions">
-              <button 
-                className="cancel-btn" 
-                onClick={() => setShowDeleteModal(false)}
-              >
+              <button className="cancel-btn" onClick={() => setShowDeleteModal(false)}>
                 Cancel
               </button>
-              <button 
-                className="delete-confirm-btn" 
-                onClick={confirmDelete}
-              >
+              <button className="delete-confirm-btn" onClick={confirmDelete}>
                 Delete
               </button>
             </div>
