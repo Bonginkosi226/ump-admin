@@ -27,14 +27,14 @@ const Buildings = () => {
         setLoading(true);
         setError(null);
         
-        const buildingsResponse = await fetch('https://campus-api-cuut.vercel.app/api/buildings');
+        const buildingsResponse = await fetch('/api/buildings');
         if (!buildingsResponse.ok) {
             throw new Error(`Failed to fetch buildings: ${buildingsResponse.statusText}`);
         }
         let buildingsData = await buildingsResponse.json();
 
         try {
-            const linksResponse = await fetch('https://campus-api-cuut.vercel.app/api/links');
+            const linksResponse = await fetch('/api/links');
             if (linksResponse.ok) {
                 const linksData = await linksResponse.json();
                 if (Array.isArray(linksData)) {

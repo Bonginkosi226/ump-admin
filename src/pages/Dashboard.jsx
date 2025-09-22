@@ -34,7 +34,7 @@ const Dashboard = () => {
         setError(null);
         
         // Fetch buildings directly from your API endpoint
-        const response = await fetch('https://campus-api-cuut.vercel.app/api/buildings');
+        const response = await fetch('/api/buildings');
         
         if (!response.ok) {
           throw new Error('Failed to fetch buildings');
