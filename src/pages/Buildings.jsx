@@ -21,38 +21,43 @@ const Buildings = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // Fetch buildings + images
   useEffect(() => {
     const fetchBuildings = async () => {
       try {
         setLoading(true);
         setError(null);
-        
-        const buildingsResponse = await fetch('/api/buildings');
-        if (!buildingsResponse.ok) {
-            throw new Error(`Failed to fetch buildings: ${buildingsResponse.statusText}`);
+
+        const buildingsRes = await fetch('/api/buildings');
+        if (!buildingsRes.ok) {
+          const text = await buildingsRes.text();
+          throw new Error(`Failed to fetch buildings: ${buildingsRes.status} - ${text}`);
         }
-        let buildingsData = await buildingsResponse.json();
+        let buildingsData = await buildingsRes.json();
 
         try {
-            const linksResponse = await fetch('/api/links');
-            if (linksResponse.ok) {
-                const linksData = await linksResponse.json();
-                if (Array.isArray(linksData)) {
-                    const imageMap = new Map(linksData.filter(l => l.imageurl).map(l => [l.name.toLowerCase(), l.imageurl]));
-                    buildingsData = buildingsData.map(building => ({
-                        ...building,
-                        icon: imageMap.get(building.name.toLowerCase()) || building.icon || null
-                    }));
-                }
-            } else {
-                console.warn('Could not fetch image links, proceeding without building images from that source.');
+          const linksRes = await fetch('/api/links');
+          if (linksRes.ok) {
+            const linksData = await linksRes.json();
+            if (Array.isArray(linksData)) {
+              const imageMap = new Map(
+                linksData
+                  .filter(l => l.imageurl)
+                  .map(l => [l.name.toLowerCase().trim(), l.imageurl])
+              );
+              buildingsData = buildingsData.map(building => ({
+                ...building,
+                icon: imageMap.get(building.name.toLowerCase().trim()) || building.icon || null
+              }));
             }
+          } else {
+            console.warn('Could not fetch image links:', linksRes.status, await linksRes.text());
+          }
         } catch (e) {
-            console.warn('Error fetching image links, proceeding without building images from that source.', e);
+          console.warn('Error fetching image links, proceeding without them:', e);
         }
 
         setBuildings(buildingsData);
-
       } catch (err) {
         console.error('Error fetching building data:', err);
         setError('Failed to load building data from API');
@@ -64,7 +69,8 @@ const Buildings = () => {
     fetchBuildings();
   }, []);
 
-  const handleEdit = (building) => {
+  // EDIT BUILDING
+  const handleEdit = building => {
     setSelectedBuilding(building);
     setEditFormData({
       name: building.name || '',
@@ -78,132 +84,162 @@ const Buildings = () => {
     setShowEditModal(true);
   };
 
-  const handleDelete = (building) => {
+  const handleEditInputChange = e => {
+    const { name, value, files } = e.target;
+    if (name === 'icon') {
+      setEditFormData(prev => ({ ...prev, iconFile: files[0] }));
+    } else {
+      setEditFormData(prev => ({ ...prev, [name]: value }));
+    }
+  };
+
+  const handleEditSubmit = async e => {
+    e.preventDefault();
+    if (!selectedBuilding) return;
+
+    try {
+      let iconUrl = editFormData.icon;
+
+      // Upload new image if selected
+      if (editFormData.iconFile) {
+        const formData = new FormData();
+        formData.append('image', editFormData.iconFile);
+        const uploadRes = await fetch('/api/uploads', { method: 'POST', body: formData });
+        if (!uploadRes.ok) throw new Error('Image upload failed');
+        const uploadData = await uploadRes.json();
+        iconUrl = uploadData.url;
+
+        // Update 'links' collection
+        await fetch('/api/links', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: editFormData.name, imageurl: iconUrl })
+        });
+      }
+
+      // Update building in DB
+      await fetch(`/api/buildings?id=${selectedBuilding._id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(editFormData)
+      }); 
+
+
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`Failed to update building: ${response.status} - ${text}`);
+      }
+
+      const updatedBuilding = await response.json();
+
+      // Update local state
+      setBuildings(prev =>
+        prev.map(b => (b._id === selectedBuilding._id ? { ...updatedBuilding, icon: iconUrl } : b))
+      );
+
+      setShowEditModal(false);
+      setSelectedBuilding(null);
+    } catch (err) {
+      console.error('Error updating building:', err);
+    }
+  };
+
+  // DELETE BUILDING
+  const handleDelete = building => {
     setSelectedBuilding(building);
     setShowDeleteModal(true);
   };
 
   const confirmDelete = async () => {
-    // For now, just remove from local state
-    setBuildings(buildings.filter(b => b._id !== selectedBuilding._id));
-    setShowDeleteModal(false);
-    setSelectedBuilding(null);
+    if (!selectedBuilding) return;
+
+    try {
+      const res = await fetch(`/api/buildings?id=${selectedBuilding._id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Failed to delete building: ${res.status} - ${text}`);
+      }
+
+      setBuildings(prev => prev.filter(b => b._id !== selectedBuilding._id));
+      setShowDeleteModal(false);
+      setSelectedBuilding(null);
+    } catch (err) {
+      console.error('Error deleting building:', err);
+    }
   };
 
-  const handleEditSubmit = async (e) => {
+  // ADD BUILDING
+  const handleAddInputChange = e => {
+    const { name, value, files } = e.target;
+    if (name === 'icon') {
+      setAddFormData(prev => ({ ...prev, icon: files[0] }));
+    } else {
+      setAddFormData(prev => ({ ...prev, [name]: value }));
+    }
+  };
+
+  const handleAddSubmit = async e => {
     e.preventDefault();
-    // Update local state only for now
-    const updatedBuildings = buildings.map(building => {
-        if (building._id === selectedBuilding._id) {
-            let iconUrl = editFormData.icon;
-            if (editFormData.iconFile) {
-                iconUrl = URL.createObjectURL(editFormData.iconFile);
-            }
-            return { 
-                ...building, 
-                name: editFormData.name,
-                description: editFormData.description,
-                distance: editFormData.distance,
-                contact: editFormData.contact,
-                operatingHours: editFormData.operatingHours,
-                icon: iconUrl
-            };
-        }
-        return building;
-    });
-    setBuildings(updatedBuildings);
-    setShowEditModal(false);
-    setSelectedBuilding(null);
-  };
+    try {
+      let imageUrl = null;
 
-  const handleEditInputChange = (e) => {
-    const { name, value, files } = e.target;
-    if (name === 'icon') {
-        setEditFormData(prev => ({ ...prev, iconFile: files[0] }));
-    } else {
-        setEditFormData(prev => ({ ...prev, [name]: value }));
-    }
-  };
+      // 1️⃣ Upload image if exists
+      if (addFormData.icon) {
+        const formData = new FormData();
+        formData.append('image', addFormData.icon);
 
-  const handleAddInputChange = (e) => {
-    const { name, value, files } = e.target;
-    if (name === 'icon') {
-        setAddFormData(prev => ({ ...prev, icon: files[0] }));
-    } else {
-        setAddFormData(prev => ({ ...prev, [name]: value }));
-    }
-  };
+        const uploadRes = await fetch('/api/uploads', { method: 'POST', body: formData });
+        if (!uploadRes.ok) throw new Error('Image upload failed');
+        const uploadData = await uploadRes.json();
+        imageUrl = uploadData.url;
+      }
 
-  const handleAddSubmit = async (e) => {
-  e.preventDefault();
-
-  try {
-    let imageUrl = null;
-
-    // 1️⃣ Upload image if exists
-    if (addFormData.icon) {
-      const formData = new FormData();
-      formData.append('image', addFormData.icon);
-
-      const uploadRes = await fetch('/api/uploads', {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!uploadRes.ok) throw new Error('Image upload failed');
-      const uploadData = await uploadRes.json();
-      imageUrl = uploadData.url;
-    }
-
-    // 2️⃣ Save building info
-    const response = await fetch('/api/buildings', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name: addFormData.name,
-        description: addFormData.description,
-        distance: addFormData.distance,
-        contact: addFormData.contact,
-        operatingHours: addFormData.operatingHours
-      })
-    });
-
-    if (!response.ok) throw new Error('Failed to create building');
-    const data = await response.json(); // should return new building id
-
-    // 3️⃣ Save image URL in 'links' collection
-    if (imageUrl) {
-      await fetch('/api/links', {
+      // 2️⃣ Create building
+      const response = await fetch('/api/buildings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: addFormData.name,
-          imageurl: imageUrl
+          description: addFormData.description,
+          distance: addFormData.distance,
+          contact: addFormData.contact,
+          operatingHours: addFormData.operatingHours
         })
       });
+
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`Failed to create building: ${response.status} - ${text}`);
+      }
+
+      const data = await response.json();
+
+      // 3️⃣ Save image URL in 'links'
+      if (imageUrl) {
+        await fetch('/api/links', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: addFormData.name, imageurl: imageUrl })
+        });
+      }
+
+      // 4️⃣ Update local state
+      setBuildings(prev => [...prev, { ...addFormData, _id: data._id, icon: imageUrl }]);
+
+      // 5️⃣ Reset form
+      setAddFormData({
+        name: '',
+        description: '',
+        distance: '',
+        contact: '',
+        operatingHours: '8:00 AM - 5:00 PM',
+        icon: null
+      });
+      setShowAddModal(false);
+    } catch (err) {
+      console.error('Error creating building:', err);
     }
-
-    // 4️⃣ Update state
-    setBuildings(prev => [
-      ...prev,
-      { ...addFormData, _id: data.id, icon: imageUrl }
-    ]);
-
-    // 5️⃣ Reset form & close modal
-    setAddFormData({
-      name: '',
-      description: '',
-      distance: '',
-      contact: '',
-      operatingHours: '8:00 AM - 5:00 PM',
-      icon: null
-    });
-    setShowAddModal(false);
-
-  } catch (err) {
-    console.error('Error creating building:', err);
-  }
-};
+  };
 
 
   if (loading) {
