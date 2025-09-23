@@ -84,65 +84,96 @@ const Buildings = () => {
     setShowEditModal(true);
   };
 
-  const handleEditInputChange = e => {
+  // Handle image upload for EDIT
+  const handleEditInputChange = async (e) => {
     const { name, value, files } = e.target;
-    if (name === 'icon') {
-      setEditFormData(prev => ({ ...prev, iconFile: files[0] }));
+    if (name === 'icon' && files && files[0]) {
+      const file = files[0];
+      console.log('Selected file:', file);
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const base64 = reader.result.split(',')[1];
+        try {
+          const res = await fetch('/api/upload', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ image: base64 }),
+          });
+          const data = await res.json();
+          console.log('Upload response:', data);
+          if (data.url) {
+            setEditFormData(prev => ({ ...prev, icon: data.url, iconFile: null }));
+          } else {
+            alert('Image upload failed: ' + (data.error || 'Unknown error'));
+          }
+        } catch (err) {
+          console.error('Image upload error:', err);
+          alert('Image upload error: ' + err.message);
+        }
+      };
+      reader.readAsDataURL(file);
     } else {
       setEditFormData(prev => ({ ...prev, [name]: value }));
     }
   };
 
   const handleEditSubmit = async e => {
-    e.preventDefault();
-    if (!selectedBuilding) return;
+  e.preventDefault();
+  if (!selectedBuilding) return;
 
-    try {
-      let iconUrl = editFormData.icon;
+  try {
+    let iconUrl = editFormData.icon;
 
-      // Upload new image if selected
-      if (editFormData.iconFile) {
-        const formData = new FormData();
-        formData.append('image', editFormData.iconFile);
-        const uploadRes = await fetch('/api/uploads', { method: 'POST', body: formData });
-        if (!uploadRes.ok) throw new Error('Image upload failed');
-        const uploadData = await uploadRes.json();
-        iconUrl = uploadData.url;
+    // Upload new image if selected
+    if (editFormData.iconFile) {
+      const formData = new FormData();
+      formData.append('image', editFormData.iconFile);
+      const uploadRes = await fetch('/api/uploads', { method: 'POST', body: formData });
+      if (!uploadRes.ok) throw new Error('Image upload failed');
+      const uploadData = await uploadRes.json();
+      iconUrl = uploadData.url;
 
-        // Update 'links' collection
-        await fetch('/api/links', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: editFormData.name, imageurl: iconUrl })
-        });
-      }
-
-      // Update building in DB
-      await fetch(`/api/buildings?id=${selectedBuilding._id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(editFormData)
-      }); 
-
-
-      if (!response.ok) {
-        const text = await response.text();
-        throw new Error(`Failed to update building: ${response.status} - ${text}`);
-      }
-
-      const updatedBuilding = await response.json();
-
-      // Update local state
-      setBuildings(prev =>
-        prev.map(b => (b._id === selectedBuilding._id ? { ...updatedBuilding, icon: iconUrl } : b))
-      );
-
-      setShowEditModal(false);
-      setSelectedBuilding(null);
-    } catch (err) {
-      console.error('Error updating building:', err);
+      // Update 'links' collection
+      await fetch('/api/links', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: editFormData.name, imageurl: iconUrl })
+      });
     }
-  };
+
+    // Update building in DB
+    const response = await fetch(`/api/buildings?id=${selectedBuilding._id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...editFormData, icon: iconUrl })
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`Failed to update building: ${response.status} - ${text}`);
+    }
+
+    const updatedBuilding = await response.json();
+
+    // Update local state
+    setBuildings(prev =>
+      prev.map(b => (b._id === selectedBuilding._id ? { ...updatedBuilding, icon: iconUrl } : b))
+    );
+
+    setShowEditModal(false);
+    setSelectedBuilding(null);
+
+    // ✅ Success message
+    alert("Building updated successfully!");
+    // Or if using toast: toast.success("Building updated successfully!");
+
+  } catch (err) {
+    console.error('Error updating building:', err);
+    alert(`Error: ${err.message}`);
+    // Or toast.error(`Error: ${err.message}`);
+  }
+};
+
 
   // DELETE BUILDING
   const handleDelete = building => {
@@ -169,10 +200,34 @@ const Buildings = () => {
   };
 
   // ADD BUILDING
-  const handleAddInputChange = e => {
+  // Handle image upload for ADD
+  const handleAddInputChange = async (e) => {
     const { name, value, files } = e.target;
-    if (name === 'icon') {
-      setAddFormData(prev => ({ ...prev, icon: files[0] }));
+    if (name === 'icon' && files && files[0]) {
+      const file = files[0];
+      console.log('Selected file:', file);
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const base64 = reader.result.split(',')[1];
+        try {
+          const res = await fetch('/api/upload', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ image: base64 }),
+          });
+          const data = await res.json();
+          console.log('Upload response:', data);
+          if (data.url) {
+            setAddFormData(prev => ({ ...prev, icon: data.url }));
+          } else {
+            alert('Image upload failed: ' + (data.error || 'Unknown error'));
+          }
+        } catch (err) {
+          console.error('Image upload error:', err);
+          alert('Image upload error: ' + err.message);
+        }
+      };
+      reader.readAsDataURL(file);
     } else {
       setAddFormData(prev => ({ ...prev, [name]: value }));
     }
@@ -203,7 +258,8 @@ const Buildings = () => {
           description: addFormData.description,
           distance: addFormData.distance,
           contact: addFormData.contact,
-          operatingHours: addFormData.operatingHours
+          operatingHours: addFormData.operatingHours,
+          icon: addFormData.icon // <-- send the URL
         })
       });
 
@@ -413,12 +469,14 @@ const Buildings = () => {
               
               <div className="form-group">
                 <label>Building Image</label>
-                {addFormData.icon && <img src={URL.createObjectURL(addFormData.icon)} alt="Preview" style={{width: '100px', height: '100px', objectFit: 'cover', marginBottom: '10px'}}/>}
+                {addFormData.icon && (
+                  <img src={addFormData.icon} alt="Preview" style={{width: '100px', height: '100px', objectFit: 'cover', marginBottom: '10px'}}/>
+                )}
                 <input
-                    type="file"
-                    name="icon"
-                    onChange={handleAddInputChange}
-                    accept="image/*"
+                  type="file"
+                  name="icon"
+                  onChange={handleAddInputChange}
+                  accept="image/*"
                 />
               </div>
 
@@ -507,17 +565,15 @@ const Buildings = () => {
               <div className="form-group">
                 <label>Building Image</label>
                 <div>
-                    {editFormData.iconFile ? (
-                        <img src={URL.createObjectURL(editFormData.iconFile)} alt="New preview" style={{width: '100px', height: '100px', objectFit: 'cover', marginBottom: '10px'}}/>
-                    ) : (
-                        editFormData.icon && <img src={editFormData.icon} alt="Current building" style={{width: '100px', height: '100px', objectFit: 'cover', marginBottom: '10px'}}/>
+                    {editFormData.icon && (
+                      <img src={editFormData.icon} alt="Current building" style={{width: '100px', height: '100px', objectFit: 'cover', marginBottom: '10px'}}/>
                     )}
                 </div>
                 <input
-                    type="file"
-                    name="icon"
-                    onChange={handleEditInputChange}
-                    accept="image/*"
+                  type="file"
+                  name="icon"
+                  onChange={handleEditInputChange}
+                  accept="image/*"
                 />
               </div>
 
