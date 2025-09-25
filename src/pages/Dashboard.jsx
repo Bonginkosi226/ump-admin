@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from 'recharts';
 import { Building, Users, MapPin, Plus, AlertCircle } from 'lucide-react';
-import './Dashboard.css';
+import './Dashboard.css'; // Make sure this file includes the new styles below
 
 const Dashboard = () => {
   const [buildings, setBuildings] = useState([]);
@@ -216,11 +216,22 @@ const Dashboard = () => {
           <h3>Recent Buildings</h3>
           <div className="buildings-list">
             {buildings.slice(0, 5).map((building) => (
-              <div key={building._id} className="building-preview-item">
-                <div className="building-preview-name">{building.name}</div>
-                <div className="building-preview-desc">{building.description}</div>
-                <div className="building-preview-distance">{building.distance}</div>
-              </div>
+              <a key={building._id} href="/buildings" className="building-preview-item">
+                <div className="building-preview-avatar">
+                  {building.icon ? (
+                    <img src={building.icon} alt={building.name} />
+                  ) : (
+                    <span>{building.name?.charAt(0) || 'B'}</span>
+                  )}
+                </div>
+                <div className="building-preview-info">
+                  <div className="building-preview-name">{building.name}</div>
+                  <div className="building-preview-desc">{building.description || 'No description available.'}</div>
+                </div>
+                {building.distance && (
+                  <div className="building-preview-distance">{building.distance}</div>
+                )}
+              </a>
             ))}
           </div>
         </div>

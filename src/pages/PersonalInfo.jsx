@@ -181,38 +181,52 @@ const PersonalInfo = () => {
     }
   };
 
-  const handleChangePassword = () => {
-    // Validate current password is entered
-    if (!passwordData.currentPassword.trim()) {
-      alert('Please enter your current password!');
-      return;
-    }
+  const handleChangePassword = async () => {
+  // Basic validation
+  if (!passwordData.currentPassword.trim()) {
+    alert("Please enter your current password!");
+    return;
+  }
 
-    // Validate new password is entered
-    if (!passwordData.newPassword.trim()) {
-      alert('Please enter a new password!');
-      return;
-    }
+  if (!passwordData.newPassword.trim()) {
+    alert("Please enter a new password!");
+    return;
+  }
 
-    // Check if passwords match
-    if (passwordData.newPassword !== passwordData.confirmPassword) {
-      alert('New passwords do not match!');
-      return;
+  if (passwordData.newPassword !== passwordData.confirmPassword) {
+    alert("New passwords do not match!");
+    return;
+  }
+
+  // Check password requirements
+  const allRequirementsMet = Object.values(passwordRequirements).every(req => req);
+  if (!allRequirementsMet) {
+    alert("Password does not meet all requirements!");
+    return;
+  }
+
+  try {
+    // Call API to change password
+    const response = await apiService.changePassword({
+      currentPassword: passwordData.currentPassword,
+      newPassword: passwordData.newPassword
+    });
+
+    if (response.success) {
+      alert("Password changed successfully!");
+      // Reset form
+      setPasswordData({ currentPassword: "", newPassword: "", confirmPassword: "" });
+      setShowPasswordForm(false);
+    } else {
+      alert("Error: " + (response.message || "Failed to change password"));
     }
-    
-    // Check password requirements
-    const allRequirementsMet = Object.values(passwordRequirements).every(req => req);
-    if (!allRequirementsMet) {
-      alert('Password does not meet all requirements!');
-      return;
-    }
-    
-    console.log('Changing password...');
-    // Password change logic here
-    alert('Password changed successfully!');
-    setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
-    setShowPasswordForm(false);
-  };
+  } catch (error) {
+    console.error("Change password error:", error);
+    alert("Failed to change password. " + error.message);
+  }
+};
+
+
   
   if (loading) {
     return (
