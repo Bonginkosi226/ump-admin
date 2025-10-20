@@ -37,10 +37,12 @@ const Dashboard = () => {
         const response = await fetch('/api/buildings');
         
         if (!response.ok) {
-          throw new Error('Failed to fetch buildings');
+          const text = await response.text();
+          throw new Error(`Failed to fetch buildings: ${response.status} - ${text}`);
         }
         
-        const buildingsData = await response.json();
+        const json = await response.json();
+        const buildingsData = Array.isArray(json) ? json : (json?.data ?? []);
         setBuildings(buildingsData);
         
       } catch (err) {

@@ -33,8 +33,8 @@ const Buildings = () => {
           const text = await buildingsRes.text();
           throw new Error(`Failed to fetch buildings: ${buildingsRes.status} - ${text}`);
         }
-        let buildingsData = await buildingsRes.json();
-
+        const buildingsJson = await buildingsRes.json();
+        let buildingsData = Array.isArray(buildingsJson) ? buildingsJson : (buildingsJson?.data ?? []);
         try {
           const linksRes = await fetch('/api/links');
           if (linksRes.ok) {
@@ -76,7 +76,7 @@ const Buildings = () => {
       name: building.name || '',
       description: building.description || '',
       distance: building.distance || '',
-      contact: building.contact || '',
+      contact: (building.contact && typeof building.contact === 'object' ? building.contact.phone : building.contact) || '',
       operatingHours: building.operatingHours || building.hours || '8:00 AM - 5:00 PM',
       icon: building.icon || null,
       iconFile: null
@@ -117,62 +117,89 @@ const Buildings = () => {
     }
   };
 
-  const handleEditSubmit = async e => {
-  e.preventDefault();
-  if (!selectedBuilding) return;
-
-  try {
-    let iconUrl = editFormData.icon;
-
-    // Upload new image if selected
-    if (editFormData.iconFile) {
-      const formData = new FormData();
-      formData.append('image', editFormData.iconFile);
-      const uploadRes = await fetch('/api/uploads', { method: 'POST', body: formData });
-      if (!uploadRes.ok) throw new Error('Image upload failed');
-      const uploadData = await uploadRes.json();
-      iconUrl = uploadData.url;
-
-      // Update 'links' collection
-      await fetch('/api/links', {
-        method: 'POST',
+  const handleEditSubmit = async (e) => {
+    e.preventDefault();
+    if (!selectedBuilding) return;
+  
+    try {
+      let iconUrl = editFormData.icon;
+  
+      // Upload new image if selected
+      if (editFormData.iconFile) {
+        const formData = new FormData();
+        formData.append('image', editFormData.iconFile);
+        const uploadRes = await fetch('/api/uploads', { method: 'POST', body: formData });
+        if (!uploadRes.ok) throw new Error('Image upload failed');
+        const uploadData = await uploadRes.json();
+        iconUrl = uploadData.url;
+  
+        // Update 'links' collection
+        await fetch('/api/links', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: editFormData.name, imageurl: iconUrl })
+        });
+      }
+  
+      const rawId = selectedBuilding._id || selectedBuilding.id || selectedBuilding.providedid;
+      const id = String(rawId || '').trim();
+      if (!id) {
+        throw new Error('No building ID available on selected item');
+      }
+      if (!/^[a-fA-F0-9]{24}$/.test(id)) {
+        alert('This building cannot be updated because its ID is not a valid Mongo ObjectId.');
+        return;
+      }
+  
+      const payload = {
+        name: editFormData.name,
+        description: editFormData.description,
+        distance: editFormData.distance,
+        contact: editFormData.contact,
+        operatingHours: editFormData.operatingHours,
+      };
+      if (iconUrl) {
+        payload.icon = iconUrl;
+      }
+  
+      // Verify the building exists on the remote API
+      const preCheck = await fetch(`/api/buildings?id=${id}`);
+      if (!preCheck.ok) {
+        const text = await preCheck.text();
+        throw new Error(`Cannot update: building not found (${preCheck.status} - ${text})`);
+      }
+  
+      // Perform the update using the remote API contract
+      const res = await fetch(`/api/buildings?id=${id}`, {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: editFormData.name, imageurl: iconUrl })
+        body: JSON.stringify(payload)
       });
+      const resText = await res.text();
+      if (!res.ok) {
+        throw new Error(`Failed to update building: ${res.status} - ${resText}`);
+      }
+  
+      let updated;
+      try {
+        updated = JSON.parse(resText);
+      } catch {
+        updated = null;
+      }
+      const updatedDoc = updated || { ...selectedBuilding, ...payload };
+  
+      setBuildings(prev =>
+        prev.map(b => ((b._id || b.id || b.providedid) === id ? { ...b, ...updatedDoc, icon: iconUrl || b.icon } : b))
+      );
+  
+      setShowEditModal(false);
+      setSelectedBuilding(null);
+      alert('Building updated successfully!');
+    } catch (err) {
+      console.error('Error updating building:', err);
+      alert(`Error: ${err.message}`);
     }
-
-    // Update building in DB
-    const response = await fetch(`/api/buildings?id=${selectedBuilding._id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...editFormData, icon: iconUrl })
-    });
-
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(`Failed to update building: ${response.status} - ${text}`);
-    }
-
-    const updatedBuilding = await response.json();
-
-    // Update local state
-    setBuildings(prev =>
-      prev.map(b => (b._id === selectedBuilding._id ? { ...updatedBuilding, icon: iconUrl } : b))
-    );
-
-    setShowEditModal(false);
-    setSelectedBuilding(null);
-
-    // ✅ Success message
-    alert("Building updated successfully!");
-    // Or if using toast: toast.success("Building updated successfully!");
-
-  } catch (err) {
-    console.error('Error updating building:', err);
-    alert(`Error: ${err.message}`);
-    // Or toast.error(`Error: ${err.message}`);
-  }
-};
+  };
 
 
   // DELETE BUILDING
@@ -185,10 +212,19 @@ const Buildings = () => {
     if (!selectedBuilding) return;
 
     try {
-      const res = await fetch(`/api/buildings?id=${selectedBuilding._id}`, { method: 'DELETE' });
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(`Failed to delete building: ${res.status} - ${text}`);
+      const deleteEndpoints = [
+        `/api/buildings/${selectedBuilding._id}`,
+        `/api/buildings?id=${selectedBuilding._id}`
+      ];
+      let deleteResponse;
+      let deleteErrorText = '';
+      for (const url of deleteEndpoints) {
+        const res = await fetch(url, { method: 'DELETE' });
+        if (res.ok) { deleteResponse = res; break; }
+        deleteErrorText = await res.text();
+      }
+      if (!deleteResponse) {
+        throw new Error(`Failed to delete building: 404/Bad Request - ${deleteErrorText}`);
       }
 
       setBuildings(prev => prev.filter(b => b._id !== selectedBuilding._id));
@@ -366,7 +402,7 @@ const Buildings = () => {
                 </div>
                 <div className="col-description">{building.description}</div>
                 <div className="col-distance">{building.distance}</div>
-                <div className="col-contact">{building.contact}</div>
+                <div className="col-contact">{typeof building.contact === 'object' ? (building.contact?.phone || '') : (building.contact || '')}</div>
                 <div className="col-hours">{building.operatingHours || building.hours}</div>
                 <div className="col-action">
                   <button 
