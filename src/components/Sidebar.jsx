@@ -30,6 +30,11 @@ const Sidebar = ({ isOpen, onClose }) => {
     },
     {
       icon: MapPin,
+      label: 'Coordinates',
+      path: '/coordinates'
+    },
+    {
+      icon: MapPin,
       label: 'Paths',
       path: '/paths'
     },

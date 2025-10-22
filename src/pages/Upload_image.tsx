@@ -6,12 +6,13 @@ const UploadPage = () => {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-
+/** 
   const handleFileChange = (e) => {
     setFile(e.target.files[0]);
     setImageUrl(null);
     setError(null);
   };
+  */
 
   const handleUpload = async () => {
     if (!file) return setError('Please select a file first');
@@ -34,7 +35,7 @@ const UploadPage = () => {
       setImageUrl(data.url);
     } catch (err) {
       console.error(err);
-      setError(err.message || "Upload failed");
+      //setError(err.message || "Upload failed");
     } finally {
       setUploading(false);
     }
@@ -44,7 +45,7 @@ const UploadPage = () => {
     <div style={{ padding: "2rem", fontFamily: "sans-serif" }}>
       <h1>Upload an Image</h1>
 
-      <input type="file" onChange={handleFileChange} accept="image/*" />
+      {/* <input type="file" onChange={handleFileChange} accept="image/*" /> */}
       <button onClick={handleUpload} disabled={uploading} style={{ marginLeft: "1rem" }}>
         {uploading ? "Uploading..." : "Upload"}
       </button>

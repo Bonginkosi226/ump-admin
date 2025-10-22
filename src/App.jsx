@@ -13,6 +13,7 @@ import Notifications from './pages/Notifications';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
 import './App.css';
+import Coordinates from './pages/Coordinates';
 
 function App() {
   return (
@@ -33,6 +34,7 @@ function App() {
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="buildings" element={<Buildings />} />
             <Route path="paths" element={<Paths />} />
+            <Route path="coordinates" element={<Coordinates />} />
             <Route path="map-preview" element={<MapPreview />} />
             <Route path="settings" element={<Settings />} />
             <Route path="personal-info" element={<PersonalInfo />} />
