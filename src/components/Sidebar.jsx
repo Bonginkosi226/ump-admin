@@ -34,11 +34,6 @@ const Sidebar = ({ isOpen, onClose }) => {
       path: '/coordinates'
     },
     {
-      icon: MapPin,
-      label: 'Paths',
-      path: '/paths'
-    },
-    {
       icon: Map,
       label: 'Map Preview',
       path: '/map-preview'

@@ -140,47 +140,186 @@
   gap: 30px;
 }
 
+.dashboard-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 30px;
+  align-items: stretch;
+}
 
-
-.analytics-section {
+.dashboard-panel {
+  background: transparent;
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  max-width: 800px;
-  width: 100%;
+  gap: 24px;
+}
+
+.primary-panel .chart-container,
+.secondary-panel .buildings-preview {
+  background: white;
+  border-radius: 18px;
+  padding: 24px;
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.08);
+  border: 1px solid rgba(148, 163, 184, 0.12);
 }
 
 .chart-container {
-  background: white;
-  border-radius: 15px;
-  padding: 25px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
 }
 
-.chart-container h3 {
-  margin: 0 0 10px 0;
-  font-size: 18px;
-  color: #1e293b;
+.chart-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.chart-header h3 {
+  margin: 0;
+  font-size: 20px;
+  color: #0f172a;
 }
 
 .chart-period {
-  font-size: 14px;
+  font-size: 13px;
   color: #64748b;
-  margin-bottom: 20px;
-  cursor: pointer;
+  font-weight: 500;
+}
+
+.stats-report-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
 }
 
 .stats-summary {
-  display: flex;
-  flex-direction: column;
-  gap: 15px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
 }
 
 .summary-item {
   background: white;
-  border-radius: 15px;
+  border-radius: 16px;
   padding: 20px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+}
+
+.reports-card {
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.reports-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.reports-header h3 {
+  margin: 0;
+  font-size: 18px;
+  color: #1e293b;
+}
+
+.reports-subtitle {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: #64748b;
+}
+
+.reports-download-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 10px;
+  border: none;
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  color: white;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.2s ease;
+}
+
+.reports-download-button:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.reports-download-button:not(:disabled):hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.25);
+}
+
+.reports-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.reports-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.reports-label {
+  font-size: 14px;
+  color: #475569;
+  font-weight: 500;
+}
+
+.reports-value {
+  font-size: 16px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.reports-chart-summary h4 {
+  margin: 0 0 8px;
+  font-size: 15px;
+  color: #1e293b;
+}
+
+.reports-chart-summary ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.reports-chart-summary li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #f1f5f9;
+  font-size: 13px;
+  color: #475569;
+}
+
+.reports-chart-summary li strong {
+  font-size: 14px;
+  color: #1e293b;
 }
 
 .summary-item h4 {
@@ -202,20 +341,8 @@
   color: #64748b;
 }
 
-@media (max-width: 1200px) {
-  .dashboard-content {
-    flex-direction: column;
-  }
-}
-
-@media (max-width: 768px) {
-  .dashboard {
-    padding: 15px;
-  }
-  
-  .stats-grid {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 15px;
+    width: 100%;
+    justify-content: center;
   }
 }
 
