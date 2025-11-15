@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from 'recharts';
-import { Building, Users, MapPin, Plus, AlertCircle, Download } from 'lucide-react';
+import { Building, Users, MapPin, AlertCircle, Download } from 'lucide-react';
 import './Dashboard.css'; // Make sure this file includes the new styles below
 
 const Dashboard = () => {
@@ -11,10 +11,10 @@ const Dashboard = () => {
 
   // Fallback static data for other stats (since we only have buildings endpoint)
   const fallbackStatsData = [
-    { title: 'Total Buildings', value: '0', icon: Building, color: 'orange' },
-    { title: 'New Buildings', value: '0', icon: Plus, color: 'orange' },
-    { title: 'Residential Buildings', value: '0', icon: MapPin, color: 'orange' },
-    { title: 'Academic Buildings', value: '0', icon: Users, color: 'orange' }
+    { title: 'Total Buildings', value: '0', icon: Building },
+    { title: 'Residential Buildings', value: '0', icon: MapPin },
+    { title: 'Academic Buildings', value: '0', icon: Users },
+    { title: 'Other Buildings', value: '0', icon: AlertCircle }
   ];
 
   const fallbackCategoryData = [
@@ -56,21 +56,17 @@ const Dashboard = () => {
   const statsSummary = useMemo(() => {
     if (!buildings.length) {
       const totalBuildings = Number(fallbackStatsData[0].value) || 0;
-      const newBuildings = Number(fallbackStatsData[1].value) || 0;
       const residential = fallbackCategoryData[0].count;
       const academic = fallbackCategoryData[1].count;
       const other = fallbackCategoryData[2].count;
       return {
         cards: fallbackStatsData,
         chart: fallbackCategoryData,
-        numeric: { totalBuildings, newBuildings, residential, academic, other }
+        numeric: { totalBuildings, residential, academic, other }
       };
     }
 
     const totalBuildings = buildings.length;
-    const newBuildings = buildings.filter(b =>
-      b.name?.toLowerCase().includes('new') || b.description?.toLowerCase().includes('new')
-    ).length;
     const residential = buildings.filter(b =>
       b.description?.toLowerCase().includes('res') ||
       b.name?.toLowerCase().includes('block') ||
@@ -89,17 +85,17 @@ const Dashboard = () => {
 
     return {
       cards: [
-        { title: 'Total Buildings', value: totalBuildings.toString(), icon: Building, color: 'orange' },
-        { title: 'New Buildings', value: newBuildings.toString(), icon: Plus, color: 'orange' },
-        { title: 'Residential Buildings', value: residential.toString(), icon: MapPin, color: 'orange' },
-        { title: 'Academic Buildings', value: academic.toString(), icon: Users, color: 'orange' }
+        { title: 'Total Buildings', value: totalBuildings.toString(), icon: Building },
+        { title: 'Residential Buildings', value: residential.toString(), icon: MapPin },
+        { title: 'Academic Buildings', value: academic.toString(), icon: Users },
+        { title: 'Other Buildings', value: other.toString(), icon: AlertCircle }
       ],
       chart: [
         { category: 'Residential', count: residential },
         { category: 'Academic', count: academic },
         { category: 'Other', count: other }
       ],
-      numeric: { totalBuildings, newBuildings, residential, academic, other }
+      numeric: { totalBuildings, residential, academic, other }
     };
   }, [buildings, fallbackCategoryData, fallbackStatsData]);
 
@@ -305,34 +301,6 @@ const Dashboard = () => {
           </div>
         </section>
 
-        <aside className="dashboard-panel secondary-panel">
-          <div className="buildings-preview">
-            <div className="buildings-preview-header">
-              <h3>Recent Buildings</h3>
-              <span className="buildings-count">{Math.min(buildings.length, 5)} of {buildings.length}</span>
-            </div>
-            <div className="buildings-list">
-              {buildings.slice(0, 5).map((building) => (
-                <a key={building._id} href="/buildings" className="building-preview-item">
-                  <div className="building-preview-avatar">
-                    {building.icon ? (
-                      <img src={building.icon} alt={building.name} />
-                    ) : (
-                      <span>{building.name?.charAt(0) || 'B'}</span>
-                    )}
-                  </div>
-                  <div className="building-preview-info">
-                    <div className="building-preview-name">{building.name}</div>
-                    <div className="building-preview-desc">{building.description || 'No description available.'}</div>
-                  </div>
-                  {building.distance && (
-                    <div className="building-preview-distance">{building.distance}</div>
-                  )}
-                </a>
-              ))}
-            </div>
-          </div>
-        </aside>
       </div>
     </div>
   );

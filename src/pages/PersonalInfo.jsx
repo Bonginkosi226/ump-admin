@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft, User, Mail, Phone, Eye, EyeOff, Lock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import apiService from '../services/api';
 import './PersonalInfo.css';
 
 const PersonalInfo = () => {
@@ -38,31 +37,47 @@ const PersonalInfo = () => {
     const fetchUserData = async () => {
       try {
         setLoading(true);
-        const response = await apiService.getCurrentUser();
-        if (response.success && response.data) {
-          const user = response.data;
-          setFormData({
-             firstName: user.firstName || '',
-             lastName: user.lastName || '',
-             email: user.email || '',
-             phone: user.phone || '',
-             department: user.department || '',
-             countryCode: 'ZA'
-           });
+        const API_BASE = import.meta.env?.VITE_API_BASE_URL?.trim() || 'http://localhost:5000/api';
+        const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
+        const authToken = localStorage.getItem('authToken');
+
+        if (!storedUser?._id) {
+          throw new Error('No administrator session found');
         }
+
+        const res = await fetch(`${API_BASE.replace(/\/$/, '')}/admins/${storedUser._id}`, {
+          headers: {
+            'Content-Type': 'application/json',
+            ...(authToken ? { Authorization: `Bearer ${authToken}` } : {})
+          }
+        });
+
+        const payload = await res.json().catch(() => null);
+        if (!res.ok || payload?.success === false) {
+          throw new Error(payload?.message || 'Failed to load administrator profile');
+        }
+
+        const user = payload?.data || storedUser;
+        setFormData({
+          firstName: user.firstName || '',
+          lastName: user.lastName || '',
+          email: user.email || '',
+          phone: user.phone || '',
+          department: user.department || '',
+          countryCode: 'ZA'
+        });
       } catch (error) {
         console.error('Error fetching user data:', error);
-        // For hardcoded admin accounts, use stored user data
         const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
         if (storedUser) {
           setFormData({
-             firstName: storedUser.firstName || '',
-             lastName: storedUser.lastName || '',
-             email: storedUser.email || '',
-             phone: storedUser.phone || '',
-             department: storedUser.department || '',
-             countryCode: 'ZA'
-           });
+            firstName: storedUser.firstName || '',
+            lastName: storedUser.lastName || '',
+            email: storedUser.email || '',
+            phone: storedUser.phone || '',
+            department: storedUser.department || '',
+            countryCode: 'ZA'
+          });
         }
       } finally {
         setLoading(false);
@@ -149,19 +164,33 @@ const PersonalInfo = () => {
            department: formData.department.trim()
          };
         
-        const response = await apiService.updateCurrentUser(updateData);
-        
-        if (response.success) {
-          // Update localStorage with new user data
-          const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
-          const updatedUser = { ...currentUser, ...updateData };
-          localStorage.setItem('user', JSON.stringify(updatedUser));
-          
-          alert('Personal information updated successfully!');
-          setIsEditing(false);
-        } else {
-          throw new Error(response.message || 'Failed to update profile');
+        const API_BASE = import.meta.env?.VITE_API_BASE_URL?.trim() || 'http://localhost:5000/api';
+        const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
+        const authToken = localStorage.getItem('authToken');
+
+        if (!storedUser?._id) {
+          throw new Error('No administrator session found');
         }
+
+        const res = await fetch(`${API_BASE.replace(/\/$/, '')}/admins/${storedUser._id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(authToken ? { Authorization: `Bearer ${authToken}` } : {})
+          },
+          body: JSON.stringify(updateData)
+        });
+
+        const payload = await res.json().catch(() => null);
+        if (!res.ok || payload?.success === false) {
+          throw new Error(payload?.message || 'Failed to update profile');
+        }
+
+        const updatedUser = payload?.data || { ...storedUser, ...updateData };
+        localStorage.setItem('user', JSON.stringify(updatedUser));
+
+        alert('Personal information updated successfully!');
+        setIsEditing(false);
       } catch (error) {
         console.error('Error updating profile:', error);
         alert('Failed to update profile. Please try again.');
@@ -207,19 +236,34 @@ const PersonalInfo = () => {
 
   try {
     // Call API to change password
-    const response = await apiService.changePassword({
-      currentPassword: passwordData.currentPassword,
-      newPassword: passwordData.newPassword
+    const API_BASE = import.meta.env?.VITE_API_BASE_URL?.trim() || 'http://localhost:5000/api';
+    const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
+    const authToken = localStorage.getItem('authToken');
+
+    if (!storedUser?._id) {
+      throw new Error('No administrator session found');
+    }
+
+    const res = await fetch(`${API_BASE.replace(/\/$/, '')}/admins/${storedUser._id}/password`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(authToken ? { Authorization: `Bearer ${authToken}` } : {})
+      },
+      body: JSON.stringify({
+        currentPassword: passwordData.currentPassword,
+        newPassword: passwordData.newPassword
+      })
     });
 
-    if (response.success) {
-      alert("Password changed successfully!");
-      // Reset form
-      setPasswordData({ currentPassword: "", newPassword: "", confirmPassword: "" });
-      setShowPasswordForm(false);
-    } else {
-      alert("Error: " + (response.message || "Failed to change password"));
+    const payload = await res.json().catch(() => null);
+    if (!res.ok || payload?.success === false) {
+      throw new Error(payload?.message || 'Failed to change password');
     }
+
+    alert("Password changed successfully!");
+    setPasswordData({ currentPassword: "", newPassword: "", confirmPassword: "" });
+    setShowPasswordForm(false);
   } catch (error) {
     console.error("Change password error:", error);
     alert("Failed to change password. " + error.message);

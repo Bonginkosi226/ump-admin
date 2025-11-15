@@ -23,8 +23,19 @@ app.use('/api/users/login', rateLimits.auth);
 app.use('/api/users/register', rateLimits.auth);
 app.use('/api/*/images', rateLimits.upload);
 
-// Basic middleware
-app.use(cors());
+// CORS configuration
+const corsOptions = {
+  origin: 'http://localhost:5173', // Your frontend URL
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+};
+
+// Enable CORS for all routes
+app.use(cors(corsOptions));
+
+// Handle preflight requests
+app.options('*', cors(corsOptions));
 app.use(express.json({ limit: '10mb' })); // Limit request body size
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
@@ -55,11 +66,13 @@ app.get('/api/test', (req, res) => {
 // Import and use API routes
 const buildingsRouter = require('./routes/buildings');
 const usersRouter = require('./routes/users');
+const adminsRouter = require('./routes/admins');
 const pathsRouter = require('./routes/paths');
 const dashboardRouter = require('./routes/dashboard');
 
 app.use('/api/buildings', buildingsRouter);
 app.use('/api/users', usersRouter);
+app.use('/api/admins', adminsRouter);
 app.use('/api/paths', pathsRouter);
 app.use('/api/dashboard', dashboardRouter);
 

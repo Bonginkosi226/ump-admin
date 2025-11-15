@@ -304,19 +304,31 @@ const Buildings = () => {
         throw new Error(`Failed to create building: ${response.status} - ${text}`);
       }
 
-      const data = await response.json();
+      const responseData = await response.json();
+      const createdBuilding = responseData?.data ?? responseData ?? {};
+      const normalizedBuilding = {
+        ...createdBuilding,
+        name: createdBuilding.name ?? addFormData.name,
+        description: createdBuilding.description ?? addFormData.description,
+        distance: createdBuilding.distance ?? addFormData.distance,
+        contact: createdBuilding.contact ?? addFormData.contact,
+        operatingHours: createdBuilding.operatingHours ?? addFormData.operatingHours,
+        icon: createdBuilding.icon || imageUrl || addFormData.icon || null,
+        createdAt: createdBuilding.createdAt ?? new Date().toISOString(),
+        updatedAt: createdBuilding.updatedAt ?? new Date().toISOString(),
+      };
 
       // 3️⃣ Save image URL in 'links'
       if (imageUrl) {
         await fetch('/api/links', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: addFormData.name, imageurl: imageUrl })
+          body: JSON.stringify({ name: normalizedBuilding.name, imageurl: imageUrl })
         });
       }
 
-      // 4️⃣ Update local state
-      setBuildings(prev => [...prev, { ...addFormData, _id: data._id, icon: imageUrl }]);
+      // 4️⃣ Update local state with server-provided metadata (timestamps)
+      setBuildings(prev => [...prev, normalizedBuilding]);
 
       // 5️⃣ Reset form
       setAddFormData({

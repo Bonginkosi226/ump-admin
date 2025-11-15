@@ -1,10 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './Login.css';
-import bcrypt from 'bcryptjs';
-
-const DEMO_EMAIL = 'ncube@company.com';
-const DEMO_PASSWORD = '12345';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -48,64 +44,44 @@ const Login = () => {
   }, []);
 
   const handleSubmit = async (e) => {
-  e.preventDefault();
-  setLoading(true);
-  setError('');
+    e.preventDefault();
+    setLoading(true);
+    setError('');
 
-  try {
-    let admin = null;
-    let passwordMatches = false;
-
-    // --------- Try Database First ---------
     try {
-      const response = await fetch('/api/admins');
-      if (response.ok) {
-        const admins = await response.json();
-        admin = admins.find(
-          (a) => a.email.toLowerCase() === email.toLowerCase()
-        );
+      const API_BASE = import.meta.env?.VITE_API_BASE_URL?.trim() || 'http://localhost:5000/api';
+      const response = await fetch(`${API_BASE.replace(/\/$/, '')}/admins/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ email, password })
+      });
 
-        if (admin) {
-          passwordMatches = await bcrypt.compare(password, admin.password);
-        }
-      } else {
-        console.warn("⚠️ DB request failed, will try fallback");
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || payload?.success === false) {
+        const message = payload?.message || 'Invalid email or password';
+        throw new Error(message);
       }
-    } catch (dbErr) {
-      console.warn("⚠️ Could not reach DB, will try fallback", dbErr);
-    }
 
-    // --------- Fallback to Demo Admin ---------
-    if (!admin || !passwordMatches) {
-      if (email.toLowerCase() === DEMO_EMAIL && password === DEMO_PASSWORD) {
-        admin = {
-          _id: "demo-123",
-          email: DEMO_EMAIL,
-          name: "Bassline",
-          surname: "Ncube",
-          department: "Demo Department",
-        };
-        passwordMatches = true;
+      const admin = payload?.data?.admin || null;
+      const token = payload?.data?.token || null;
+
+      if (admin) {
+        localStorage.setItem('user', JSON.stringify(admin));
       }
+      if (token) {
+        localStorage.setItem('authToken', token);
+      }
+      localStorage.setItem('isAuthenticated', 'true');
+
+      navigate('/dashboard');
+    } catch (err) {
+      setError(`Login failed: ${err.message}`);
+    } finally {
+      setLoading(false);
     }
-
-    // --------- Final Check ---------
-    if (!admin || !passwordMatches) {
-      setError("Invalid email or password!");
-      return;
-    }
-
-    // Store & redirect
-    localStorage.setItem('isAuthenticated', 'true');
-    localStorage.setItem('user', JSON.stringify(admin));
-    navigate('/dashboard');
-
-  } catch (err) {
-    setError(`Login failed: ${err.message}`);
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
 
   return (
@@ -187,32 +163,6 @@ const Login = () => {
             </div>
           </div>
 
-          {/* --- NEW: small "user preview" gimmick when demo email is typed (UI-only) --- */}
-          {email.toLowerCase() === DEMO_EMAIL && (
-            <div className="user-preview" style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '8px 12px' }}>
-              <div
-                className="avatar"
-                style={{
-                  width: 44,
-                  height: 44,
-                  borderRadius: 8,
-                  background: '#222',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#fff',
-                  fontWeight: 700
-                }}
-              >
-                N
-              </div>
-              <div style={{ fontSize: 13 }}>
-                <div style={{ fontWeight: 700 }}>Bassline Ncube</div>
-                <div style={{ fontSize: 12, color: '#666' }}>Last login: Sep 22, 2025 • 14:12</div>
-              </div>
-            </div>
-          )}
-
           <button type="submit" className="login-button" disabled={loading}>
             {loading ? 'LOGGING IN...' : 'LOGIN'}
           </button>
@@ -236,10 +186,11 @@ const Login = () => {
           </div>
         )}
 
-        {/* --- NEW: subtle footer gimmicks (UI only) --- */}
         <div style={{ marginTop: 12, padding: '0 12px 20px', fontSize: 12, color: '#777' }}>
-          <div>Login gimmicks enabled: <em>strength meter, demo preview, success banner</em></div>
-          <div style={{ marginTop: 6 }}>System logs are visible in console for deep debugging.</div>
+          <div>Welcome back to the UMP Admin Portal.</div>
+          <div style={{ marginTop: 6 }}>
+            Need an account? <a href="/register" style={{ color: '#1d4ed8', fontWeight: 600 }}>Register here</a>.
+          </div>
         </div>
       </div>
     </div>
