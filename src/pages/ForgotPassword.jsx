@@ -8,11 +8,30 @@ const ForgotPassword = () => {
   const [isSubmitted, setIsSubmitted] = useState(false);
   const navigate = useNavigate();
 
-  const handleSubmit = (e) => {
+  const [error, setError] = useState('');
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (email) {
-      // In a real app, this would send a password reset email
-      setIsSubmitted(true);
+      try {
+        const API_BASE = import.meta.env?.VITE_API_BASE_URL?.trim() || 'http://localhost:5000/api';
+        const response = await fetch(`${API_BASE.replace(/\/$/, '')}/admins/forgot-password`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ email }),
+        });
+
+        const payload = await response.json();
+        if (!response.ok || !payload.success) {
+          throw new Error(payload.message || 'Failed to send reset link.');
+        }
+        
+        setIsSubmitted(true);
+      } catch (err) {
+        setError(err.message);
+      }
     }
   };
 
@@ -94,6 +113,8 @@ const ForgotPassword = () => {
             Enter your email address and we'll send you a link to reset your password.
           </p>
           
+          {error && <div className="error-message">{error}</div>}
+
           <form onSubmit={handleSubmit} className="forgot-password-form">
             <div className="input-group">
               <input

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Outlet, useNavigate } from 'react-router-dom';
 import { Menu, X } from 'lucide-react';
 import Sidebar from './Sidebar';
+import Header from './Header';
 import './Layout.css';
 
 const Layout = () => {
@@ -25,15 +26,12 @@ const Layout = () => {
 
   return (
     <div className="layout">
-      <button className="mobile-menu-btn" onClick={toggleSidebar}>
-        {sidebarOpen ? <X size={24} /> : <Menu size={24} />}
-      </button>
-      
-      {sidebarOpen && <div className="sidebar-overlay" onClick={closeSidebar}></div>}
-      
       <Sidebar isOpen={sidebarOpen} onClose={closeSidebar} />
-      <div className="main-content">
-        <Outlet />
+      <div className="main-container">
+        <Header />
+        <main className="main-content">
+          <Outlet />
+        </main>
       </div>
     </div>
   );

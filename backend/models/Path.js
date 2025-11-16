@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const Admin = require('./Admin');
 
 const pathSchema = new mongoose.Schema({
   name: {
@@ -431,5 +432,22 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 }
+
+pathSchema.post('save', async function (doc, next) {
+  if (this.isNew) {
+    try {
+      const Admin = require('./Admin'); // Import Admin model dynamically to avoid circular dependency if Admin also imports Path
+      const admins = await Admin.find({ adminAlerts: true });
+      for (const admin of admins) {
+        // For now, we'll just log to the console.
+        // In a real application, you would use a notification service (e.g., email, push notification)
+        console.log(`Notifying admin ${admin.email}: A new path '${doc.name}' has been added.`);
+      }
+    } catch (error) {
+      console.error('Error sending path notifications:', error);
+    }
+  }
+  next();
+});
 
 module.exports = mongoose.model('Path', pathSchema);

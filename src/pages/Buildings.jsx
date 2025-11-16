@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './Buildings.css';
+import { campusFetch } from '../services/campusApi';
 
 const Buildings = () => {
   const navigate = useNavigate();
@@ -28,7 +29,7 @@ const Buildings = () => {
         setLoading(true);
         setError(null);
 
-        const buildingsRes = await fetch('/api/buildings');
+        const buildingsRes = await campusFetch('/buildings');
         if (!buildingsRes.ok) {
           const text = await buildingsRes.text();
           throw new Error(`Failed to fetch buildings: ${buildingsRes.status} - ${text}`);
@@ -36,7 +37,7 @@ const Buildings = () => {
         const buildingsJson = await buildingsRes.json();
         let buildingsData = Array.isArray(buildingsJson) ? buildingsJson : (buildingsJson?.data ?? []);
         try {
-          const linksRes = await fetch('/api/links');
+          const linksRes = await campusFetch('/links');
           if (linksRes.ok) {
             const linksData = await linksRes.json();
             if (Array.isArray(linksData)) {
@@ -94,7 +95,7 @@ const Buildings = () => {
       reader.onloadend = async () => {
         const base64 = reader.result.split(',')[1];
         try {
-          const res = await fetch('/api/upload', {
+          const res = await campusFetch('/upload', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ image: base64 }),
@@ -128,13 +129,13 @@ const Buildings = () => {
       if (editFormData.iconFile) {
         const formData = new FormData();
         formData.append('image', editFormData.iconFile);
-        const uploadRes = await fetch('/api/uploads', { method: 'POST', body: formData });
+        const uploadRes = await campusFetch('/uploads', { method: 'POST', body: formData });
         if (!uploadRes.ok) throw new Error('Image upload failed');
         const uploadData = await uploadRes.json();
         iconUrl = uploadData.url;
   
         // Update 'links' collection
-        await fetch('/api/links', {
+        await campusFetch('/links', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name: editFormData.name, imageurl: iconUrl })
@@ -163,14 +164,14 @@ const Buildings = () => {
       }
   
       // Verify the building exists on the remote API
-      const preCheck = await fetch(`/api/buildings?id=${id}`);
+      const preCheck = await campusFetch(`/buildings?id=${id}`);
       if (!preCheck.ok) {
         const text = await preCheck.text();
         throw new Error(`Cannot update: building not found (${preCheck.status} - ${text})`);
       }
   
       // Perform the update using the remote API contract
-      const res = await fetch(`/api/buildings?id=${id}`, {
+      const res = await campusFetch(`/buildings?id=${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -213,13 +214,13 @@ const Buildings = () => {
 
     try {
       const deleteEndpoints = [
-        `/api/buildings/${selectedBuilding._id}`,
-        `/api/buildings?id=${selectedBuilding._id}`
+        `/buildings/${selectedBuilding._id}`,
+        `/buildings?id=${selectedBuilding._id}`
       ];
       let deleteResponse;
       let deleteErrorText = '';
       for (const url of deleteEndpoints) {
-        const res = await fetch(url, { method: 'DELETE' });
+        const res = await campusFetch(url, { method: 'DELETE' });
         if (res.ok) { deleteResponse = res; break; }
         deleteErrorText = await res.text();
       }
@@ -246,7 +247,7 @@ const Buildings = () => {
       reader.onloadend = async () => {
         const base64 = reader.result.split(',')[1];
         try {
-          const res = await fetch('/api/upload', {
+          const res = await campusFetch('/upload', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ image: base64 }),
@@ -279,14 +280,14 @@ const Buildings = () => {
         const formData = new FormData();
         formData.append('image', addFormData.icon);
 
-        const uploadRes = await fetch('/api/uploads', { method: 'POST', body: formData });
+        const uploadRes = await campusFetch('/uploads', { method: 'POST', body: formData });
         if (!uploadRes.ok) throw new Error('Image upload failed');
         const uploadData = await uploadRes.json();
         imageUrl = uploadData.url;
       }
 
       // 2️⃣ Create building
-      const response = await fetch('/api/buildings', {
+      const response = await campusFetch('/buildings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -320,7 +321,7 @@ const Buildings = () => {
 
       // 3️⃣ Save image URL in 'links'
       if (imageUrl) {
-        await fetch('/api/links', {
+        await campusFetch('/links', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name: normalizedBuilding.name, imageurl: imageUrl })

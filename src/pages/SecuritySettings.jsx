@@ -1,63 +1,40 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Shield, Clock, Info } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import apiService, { SESSION_TIMEOUT_CONSTANTS } from '../services/api';
 import './SecuritySettings.css';
+
+const {
+  ENABLED_KEY,
+  MINUTES_KEY,
+  DEFAULT_MINUTES
+} = SESSION_TIMEOUT_CONSTANTS;
 
 const SecuritySettings = () => {
   const navigate = useNavigate();
-  const [sessionTimeout, setSessionTimeout] = useState(true);
-  const [timeoutMinutes] = useState(10);
-  const [lastActivity, setLastActivity] = useState(Date.now());
-
-  // Session timeout logic
-  useEffect(() => {
-    if (!sessionTimeout) return;
-
-    const checkActivity = () => {
-      const now = Date.now();
-      const timeSinceLastActivity = now - lastActivity;
-      const timeoutMs = timeoutMinutes * 60 * 1000;
-
-      if (timeSinceLastActivity >= timeoutMs) {
-        // Auto logout
-        localStorage.removeItem('isAuthenticated');
-        navigate('/login');
-      }
-    };
-
-    // Check every minute
-    const interval = setInterval(checkActivity, 60000);
-
-    // Update last activity on user interaction
-    const updateActivity = () => {
-      setLastActivity(Date.now());
-    };
-
-    // Add event listeners for user activity
-    const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click'];
-    events.forEach(event => {
-      document.addEventListener(event, updateActivity, true);
-    });
-
-    return () => {
-      clearInterval(interval);
-      events.forEach(event => {
-        document.removeEventListener(event, updateActivity, true);
-      });
-    };
-  }, [sessionTimeout, lastActivity, timeoutMinutes, navigate]);
+  const [sessionTimeoutEnabled, setSessionTimeoutEnabled] = useState(true);
+  const [timeoutMinutes, setTimeoutMinutes] = useState(DEFAULT_MINUTES);
 
   const handleSessionTimeoutToggle = () => {
-    setSessionTimeout(!sessionTimeout);
-    // Save preference to localStorage
-    localStorage.setItem('sessionTimeoutEnabled', (!sessionTimeout).toString());
+    const nextEnabled = !sessionTimeoutEnabled;
+    setSessionTimeoutEnabled(nextEnabled);
+    localStorage.setItem(ENABLED_KEY, nextEnabled.toString());
+
+    if (nextEnabled) {
+      apiService.touchSession();
+    }
   };
 
-  // Load saved preferences on component mount
   useEffect(() => {
-    const savedTimeout = localStorage.getItem('sessionTimeoutEnabled');
-    if (savedTimeout !== null) {
-      setSessionTimeout(savedTimeout === 'true');
+    apiService.ensureSessionTimeoutDefaults();
+    const storedEnabled = localStorage.getItem(ENABLED_KEY);
+    if (storedEnabled !== null) {
+      setSessionTimeoutEnabled(storedEnabled !== 'false');
+    }
+
+    const storedMinutes = parseInt(localStorage.getItem(MINUTES_KEY) || '', 10);
+    if (Number.isFinite(storedMinutes) && storedMinutes > 0) {
+      setTimeoutMinutes(storedMinutes);
     }
   }, []);
 
@@ -82,7 +59,7 @@ const SecuritySettings = () => {
               <label className="toggle-switch">
                 <input
                   type="checkbox"
-                  checked={sessionTimeout}
+                  checked={sessionTimeoutEnabled}
                   onChange={handleSessionTimeoutToggle}
                 />
                 <span className="toggle-slider"></span>
@@ -100,7 +77,7 @@ const SecuritySettings = () => {
           </div>
         </div>
         
-        {sessionTimeout && (
+        {sessionTimeoutEnabled && (
           <div className="timeout-info">
             <Clock className="clock-icon" size={16} />
             <span>Session will automatically end after {timeoutMinutes} minutes of inactivity</span>

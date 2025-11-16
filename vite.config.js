@@ -5,11 +5,45 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
-      '/api': {
+      '/api/admins': {
+        target: 'http://localhost:5000',
+        changeOrigin: true,
+        secure: false
+      },
+      '/api/buildings': {
         target: 'https://campus-api-cuut.vercel.app',
         changeOrigin: true,
-        secure: true,
-        rewrite: (path) => path.replace(/^\/api/, '/api') // keeps path the same
+        secure: true
+      },
+      '/api/coordinates': {
+        target: 'https://campus-api-cuut.vercel.app',
+        changeOrigin: true,
+        secure: true
+      },
+      '/api/links': {
+        target: 'https://campus-api-cuut.vercel.app',
+        changeOrigin: true,
+        secure: true
+      },
+      '/api/upload': {
+        target: 'https://campus-api-cuut.vercel.app',
+        changeOrigin: true,
+        secure: true
+      },
+      '/api/index': {
+        target: 'https://campus-api-cuut.vercel.app',
+        changeOrigin: true,
+        secure: true
+      },
+      '/api/routes': {
+        target: 'https://campus-api-cuut.vercel.app',
+        changeOrigin: true,
+        secure: true
+      },
+      '/api': {
+        target: 'http://localhost:5000',
+        changeOrigin: true,
+        secure: false
       }
     }
   }

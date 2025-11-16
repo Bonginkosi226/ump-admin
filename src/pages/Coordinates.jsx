@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import './Coordinates.css';
+import { campusFetch } from '../services/campusApi';
 
 const Coordinates = () => {
   const [buildings, setBuildings] = useState([]);
@@ -17,13 +18,13 @@ const Coordinates = () => {
         setError(null);
 
         // fetch buildings
-        const bRes = await fetch('/api/buildings');
+        const bRes = await campusFetch('/buildings');
         if (!bRes.ok) throw new Error(`Buildings fetch failed: ${bRes.status}`);
         const bJson = await bRes.json();
         const buildingsList = Array.isArray(bJson) ? bJson : (bJson.data || []);
 
         // fetch coordinates collection (returns all docs)
-        const cRes = await fetch('/api/coordinates');
+        const cRes = await campusFetch('/coordinates');
         if (!cRes.ok) {
           console.warn('Coordinates fetch failed, continuing without coords:', await cRes.text());
           setBuildings(buildingsList);
@@ -96,7 +97,7 @@ const Coordinates = () => {
     try {
       console.log(`Saving coords for ${id}:`, { latitude, longitude });
       const payload = { latitude, longitude };
-      const res = await fetch(`/api/buildings?id=${encodeURIComponent(id)}`, {
+      const res = await campusFetch(`/buildings?id=${encodeURIComponent(id)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)

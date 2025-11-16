@@ -7,32 +7,63 @@ const Notifications = () => {
   const navigate = useNavigate();
   const [adminAlerts, setAdminAlerts] = useState(true);
   const [emailSummary, setEmailSummary] = useState(true);
+  const [admin, setAdmin] = useState(null);
+
+  useEffect(() => {
+    const loggedInUser = localStorage.getItem('user');
+    if (loggedInUser) {
+      const user = JSON.parse(loggedInUser);
+      setAdmin(user);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (admin) {
+      const fetchSettings = async () => {
+        try {
+          const API_BASE = import.meta.env?.VITE_API_BASE_URL?.trim() || 'http://localhost:5000/api';
+          const response = await fetch(`${API_BASE.replace(/\/$/, '')}/admins/${admin._id}`);
+          const payload = await response.json();
+          if (payload.success) {
+            setAdminAlerts(payload.data.adminAlerts);
+            setEmailSummary(payload.data.emailSummary);
+          }
+        } catch (error) {
+          console.error('Failed to fetch settings:', error);
+        }
+      };
+      fetchSettings();
+    }
+  }, [admin]);
+
+  const updateSettings = async (settings) => {
+    if (admin) {
+      try {
+        const API_BASE = import.meta.env?.VITE_API_BASE_URL?.trim() || 'http://localhost:5000/api';
+        await fetch(`${API_BASE.replace(/\/$/, '')}/admins/${admin._id}/settings`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(settings),
+        });
+      } catch (error) {
+        console.error('Failed to update settings:', error);
+      }
+    }
+  };
 
   const handleAdminAlertsToggle = () => {
-    setAdminAlerts(!adminAlerts);
-    // Save preference to localStorage
-    localStorage.setItem('adminAlertsEnabled', (!adminAlerts).toString());
+    const newAdminAlerts = !adminAlerts;
+    setAdminAlerts(newAdminAlerts);
+    updateSettings({ adminAlerts: newAdminAlerts, emailSummary });
   };
 
   const handleEmailSummaryToggle = () => {
-    setEmailSummary(!emailSummary);
-    // Save preference to localStorage
-    localStorage.setItem('emailSummaryEnabled', (!emailSummary).toString());
+    const newEmailSummary = !emailSummary;
+    setEmailSummary(newEmailSummary);
+    updateSettings({ adminAlerts, emailSummary: newEmailSummary });
   };
-
-  // Load saved preferences on component mount
-  useEffect(() => {
-    const savedAdminAlerts = localStorage.getItem('adminAlertsEnabled');
-    const savedEmailSummary = localStorage.getItem('emailSummaryEnabled');
-    
-    if (savedAdminAlerts !== null) {
-      setAdminAlerts(savedAdminAlerts === 'true');
-    }
-    
-    if (savedEmailSummary !== null) {
-      setEmailSummary(savedEmailSummary === 'true');
-    }
-  }, []);
 
   return (
     <div className="notifications-page">

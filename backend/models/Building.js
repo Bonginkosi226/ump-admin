@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const Admin = require('./Admin');
 
 const buildingSchema = new mongoose.Schema({
   name: {
@@ -198,5 +199,21 @@ buildingSchema.statics.findNearby = function(latitude, longitude, maxDistance = 
     status: 'Active'
   });
 };
+
+buildingSchema.post('save', async function (doc, next) {
+  if (this.isNew) {
+    try {
+      const admins = await Admin.find({ adminAlerts: true });
+      for (const admin of admins) {
+        // For now, we'll just log to the console.
+        // In a real application, you would use a notification service (e.g., email, push notification)
+        console.log(`Notifying admin ${admin.email}: A new building '${doc.name}' has been added.`);
+      }
+    } catch (error) {
+      console.error('Error sending building notifications:', error);
+    }
+  }
+  next();
+});
 
 module.exports = mongoose.model('Building', buildingSchema);

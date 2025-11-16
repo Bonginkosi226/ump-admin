@@ -1,6 +1,9 @@
 const express = require('express');
 const { body, param, query, validationResult } = require('express-validator');
 const Building = require('../models/Building');
+const Admin = require('../models/Admin');
+const Notification = require('../models/Notification');
+const sendEmail = require('../utils/sendEmail');
 const router = express.Router();
 
 // Validation middleware
@@ -395,6 +398,34 @@ router.post('/', buildingValidation, handleValidationErrors, async (req, res) =>
     
     const building = new Building(buildingData);
     await building.save();
+
+    // Create notifications for admins with adminAlerts enabled
+    try {
+      const adminsToNotify = await Admin.find({ adminAlerts: true });
+      const notificationPromises = adminsToNotify.map(admin => {
+        const notification = new Notification({
+          title: 'New Building Added',
+          message: `A new building, ${building.name} (${building.code}), has been added to the system.`,
+          type: 'new-building',
+          recipient: admin._id,
+        });
+        return notification.save();
+      });
+      await Promise.all(notificationPromises);
+
+      // Send email notifications
+      const emailPromises = adminsToNotify.map(admin => {
+        const subject = 'New Building Added';
+        const text = `Hi ${admin.firstName},\n\nA new building, ${building.name} (${building.code}), has been added to the system.\n\nThanks,\nThe UMP Admin Team`;
+        const html = `<p>Hi ${admin.firstName},</p><p>A new building, <strong>${building.name} (${building.code})</strong>, has been added to the system.</p><p>Thanks,<br>The UMP Admin Team</p>`;
+        return sendEmail(admin.email, subject, text, html);
+      });
+      await Promise.all(emailPromises);
+      
+    } catch (notificationError) {
+      console.error('Failed to create notifications:', notificationError);
+      // Do not block the response for notification failure
+    }
 
     res.status(201).json({
       success: true,

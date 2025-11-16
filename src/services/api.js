@@ -1,5 +1,31 @@
 // services/api.js
-const ADMIN_BASE = '/api/admins';
+const API_BASE = (import.meta.env?.VITE_API_BASE_URL?.trim() || '/api').replace(/\/$/, '');
+const ADMIN_BASE = '/admins';
+const SESSION_LAST_ACTIVITY_KEY = 'sessionLastActivity';
+const SESSION_TIMEOUT_ENABLED_KEY = 'sessionTimeoutEnabled';
+const SESSION_TIMEOUT_MINUTES_KEY = 'sessionTimeoutMinutes';
+const DEFAULT_TIMEOUT_MINUTES = 10;
+
+const touchSession = () => {
+  try {
+    localStorage.setItem(SESSION_LAST_ACTIVITY_KEY, Date.now().toString());
+  } catch (error) {
+    console.warn('Unable to update session activity timestamp:', error);
+  }
+};
+
+const ensureSessionTimeoutDefaults = () => {
+  try {
+    if (localStorage.getItem(SESSION_TIMEOUT_ENABLED_KEY) === null) {
+      localStorage.setItem(SESSION_TIMEOUT_ENABLED_KEY, 'true');
+    }
+    if (localStorage.getItem(SESSION_TIMEOUT_MINUTES_KEY) === null) {
+      localStorage.setItem(SESSION_TIMEOUT_MINUTES_KEY, DEFAULT_TIMEOUT_MINUTES.toString());
+    }
+  } catch (error) {
+    console.warn('Unable to ensure session timeout defaults:', error);
+  }
+};
 
 const parseStoredAdmin = () => {
   try {
@@ -20,11 +46,17 @@ const persistSession = (admin, token) => {
   if (token) {
     localStorage.setItem('authToken', token);
   }
-  if (!admin && !token) {
-    localStorage.removeItem('user');
-    localStorage.removeItem('authToken');
-    localStorage.setItem('isAuthenticated', 'false');
+
+  if (admin || token) {
+    ensureSessionTimeoutDefaults();
+    touchSession();
+    return;
   }
+
+  localStorage.removeItem('user');
+  localStorage.removeItem('authToken');
+  localStorage.setItem('isAuthenticated', 'false');
+  localStorage.removeItem(SESSION_LAST_ACTIVITY_KEY);
 };
 
 const buildHeaders = (isJson = true) => {
@@ -34,6 +66,15 @@ const buildHeaders = (isJson = true) => {
     headers.Authorization = `Bearer ${token}`;
   }
   return headers;
+};
+
+const buildApiUrl = (path) => {
+  const base = API_BASE.replace(/\/$/, '');
+  let sanitizedPath = path.startsWith('/') ? path : `/${path}`;
+  if (base.endsWith('/api') && sanitizedPath.startsWith('/api')) {
+    sanitizedPath = sanitizedPath.replace(/^\/api(\/)?/, '/');
+  }
+  return `${base}${sanitizedPath}`;
 };
 
 const readJson = async (response) => {
@@ -49,7 +90,7 @@ const readJson = async (response) => {
 const apiService = {
   loginAdmin: async ({ email, password }) => {
     try {
-      const res = await fetch(`${ADMIN_BASE}/login`, {
+      const res = await fetch(buildApiUrl(`${ADMIN_BASE}/login`), {
         method: 'POST',
         headers: buildHeaders(true),
         body: JSON.stringify({ email, password })
@@ -74,7 +115,7 @@ const apiService = {
 
   registerAdmin: async ({ firstName, lastName, email, phone, department, password }) => {
     try {
-      const res = await fetch(`${ADMIN_BASE}/register`, {
+      const res = await fetch(buildApiUrl(`${ADMIN_BASE}/register`), {
         method: 'POST',
         headers: buildHeaders(true),
         body: JSON.stringify({ firstName, lastName, email, phone, department, password })
@@ -101,6 +142,9 @@ const apiService = {
     persistSession(null, null);
   },
 
+  ensureSessionTimeoutDefaults,
+  touchSession,
+
   getCurrentUser: async () => {
     const { admin } = parseStoredAdmin();
     if (!admin?._id) {
@@ -108,7 +152,7 @@ const apiService = {
     }
 
     try {
-      const res = await fetch(`${ADMIN_BASE}/${admin._id}`, {
+      const res = await fetch(buildApiUrl(`${ADMIN_BASE}/${admin._id}`), {
         headers: buildHeaders()
       });
 
@@ -132,7 +176,7 @@ const apiService = {
     }
 
     try {
-      const res = await fetch(`${ADMIN_BASE}/${admin._id}`, {
+      const res = await fetch(buildApiUrl(`${ADMIN_BASE}/${admin._id}`), {
         method: 'PUT',
         headers: buildHeaders(true),
         body: JSON.stringify(updateData)
@@ -158,7 +202,7 @@ const apiService = {
     }
 
     try {
-      const res = await fetch(`${ADMIN_BASE}/${admin._id}/password`, {
+      const res = await fetch(buildApiUrl(`${ADMIN_BASE}/${admin._id}/password`), {
         method: 'PUT',
         headers: buildHeaders(true),
         body: JSON.stringify({ currentPassword, newPassword })
@@ -178,7 +222,7 @@ const apiService = {
 
   getAdmins: async () => {
     try {
-      const res = await fetch(ADMIN_BASE, {
+      const res = await fetch(buildApiUrl(ADMIN_BASE), {
         headers: buildHeaders()
       });
 
@@ -196,7 +240,7 @@ const apiService = {
 
   deleteAdmin: async (adminId) => {
     try {
-      const res = await fetch(`${ADMIN_BASE}/${adminId}`, {
+      const res = await fetch(buildApiUrl(`${ADMIN_BASE}/${adminId}`), {
         method: 'DELETE',
         headers: buildHeaders()
       });
@@ -212,6 +256,20 @@ const apiService = {
       return { success: false, message: error.message };
     }
   }
+};
+
+export const SESSION_TIMEOUT_CONSTANTS = {
+  LAST_ACTIVITY_KEY: SESSION_LAST_ACTIVITY_KEY,
+  ENABLED_KEY: SESSION_TIMEOUT_ENABLED_KEY,
+  MINUTES_KEY: SESSION_TIMEOUT_MINUTES_KEY,
+  DEFAULT_MINUTES: DEFAULT_TIMEOUT_MINUTES
+};
+
+export {
+  SESSION_LAST_ACTIVITY_KEY,
+  SESSION_TIMEOUT_ENABLED_KEY,
+  SESSION_TIMEOUT_MINUTES_KEY,
+  DEFAULT_TIMEOUT_MINUTES
 };
 
 export default apiService;

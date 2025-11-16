@@ -1,81 +1,76 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Eye, EyeOff, Lock, Mail, ShieldCheck, X } from 'lucide-react';
+import apiService from '../services/api';
 import './Login.css';
 
 const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState('');
-  const [showConfetti, setShowConfetti] = useState(false); // UI-only success gimmick watcher
+  const [info, setInfo] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [forgotModalOpen, setForgotModalOpen] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotMessage, setForgotMessage] = useState({ type: 'info', text: '' });
+  const [forgotLoading, setForgotLoading] = useState(false);
+
   const navigate = useNavigate();
+  const location = useLocation();
 
-  // --- NEW: derive a simple password strength score (UI only) ---
-  const passwordStrength = (() => {
-    if (!password) return 0;
-    let score = 0;
-    if (password.length >= 5) score += 1;
-    if (/[A-Z]/.test(password)) score += 1;
-    if (/[0-9]/.test(password)) score += 1;
-    if (/[^A-Za-z0-9]/.test(password)) score += 1;
-    return score; // 0..4
-  })();
-
-  // --- NEW: watch localStorage isAuthenticated and show a temporary confetti-like banner (UI only) ---
   useEffect(() => {
-    const onStorage = () => {
-      try {
-        const flag = localStorage.getItem('isAuthenticated') === 'true';
-        if (flag) {
-          setShowConfetti(true);
-          setTimeout(() => setShowConfetti(false), 2200);
-        }
-      } catch (e) {
-        // ignore
+    try {
+      const storedEmail = localStorage.getItem('rememberedAdminEmail');
+      if (storedEmail) {
+        setEmail(storedEmail);
+        setRememberMe(true);
       }
-    };
-
-    // run once (in case login happened this session)
-    onStorage();
-
-    // attach listener (in case other tabs set it)
-    window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
+    } catch (storageError) {
+      console.warn('Unable to load remembered credentials:', storageError);
+    }
   }, []);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
+  useEffect(() => {
+    const reason = location.state?.reason;
+    if (!reason) return;
+
+    if (reason === 'timeout') {
+      setInfo('Your session expired due to inactivity. Please log in again.');
+    } else if (reason === 'logout') {
+      setInfo('You have been signed out. Please log in to continue.');
+    }
+
+    const timer = window.setTimeout(() => setInfo(''), 8000);
+    return () => window.clearTimeout(timer);
+  }, [location.state]);
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
     setError('');
+    setInfo('');
 
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail || !password) {
+      setError('Enter both email address and password to continue.');
+      return;
+    }
+
+    setLoading(true);
     try {
-      const API_BASE = import.meta.env?.VITE_API_BASE_URL?.trim() || 'http://localhost:5000/api';
-      const response = await fetch(`${API_BASE.replace(/\/$/, '')}/admins/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ email, password })
-      });
-
-      const payload = await response.json().catch(() => null);
-      if (!response.ok || payload?.success === false) {
-        const message = payload?.message || 'Invalid email or password';
-        throw new Error(message);
+      const result = await apiService.loginAdmin({ email: trimmedEmail, password });
+      if (!result.success) {
+        throw new Error(result.message || 'Invalid email or password');
       }
 
-      const admin = payload?.data?.admin || null;
-      const token = payload?.data?.token || null;
-
-      if (admin) {
-        localStorage.setItem('user', JSON.stringify(admin));
+      if (rememberMe) {
+        localStorage.setItem('rememberedAdminEmail', trimmedEmail);
+      } else {
+        localStorage.removeItem('rememberedAdminEmail');
       }
-      if (token) {
-        localStorage.setItem('authToken', token);
-      }
-      localStorage.setItem('isAuthenticated', 'true');
 
-      navigate('/dashboard');
+      navigate('/dashboard', { replace: true });
     } catch (err) {
       setError(`Login failed: ${err.message}`);
     } finally {
@@ -83,116 +78,240 @@ const Login = () => {
     }
   };
 
+  const togglePasswordVisibility = () => setShowPassword((prev) => !prev);
+  const handleForgotPassword = () => {
+    setForgotModalOpen(true);
+    setForgotMessage({ type: 'info', text: '' });
+    setForgotEmail(email || '');
+  };
+  const handleRememberMeChange = (event) => setRememberMe(event.target.checked);
+
+  const closeForgotModal = () => {
+    if (forgotLoading) return;
+    setForgotModalOpen(false);
+    setForgotEmail('');
+    setForgotMessage({ type: 'info', text: '' });
+  };
+
+  const handleForgotSubmit = async (event) => {
+    event.preventDefault();
+    const candidateEmail = forgotEmail.trim().toLowerCase();
+
+    if (!candidateEmail) {
+      setForgotMessage({ type: 'error', text: 'Please enter the email address you use to sign in.' });
+      return;
+    }
+
+    setForgotLoading(true);
+    setForgotMessage({ type: 'info', text: '' });
+
+    const API_BASE = import.meta.env?.VITE_API_BASE_URL?.trim() || 'http://localhost:5000/api';
+    const baseUrl = API_BASE.replace(/\/$/, '');
+
+    try {
+      const checkRes = await fetch(`${baseUrl}/admins/check-email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: candidateEmail })
+      });
+
+      const checkPayload = await checkRes.json().catch(() => null);
+      if (!checkRes.ok || !checkPayload?.success) {
+        throw new Error(checkPayload?.message || 'Unable to verify this email. Please try again.');
+      }
+
+      if (!checkPayload.exists) {
+        setForgotMessage({ type: 'error', text: 'No administrator account is registered with that email address.' });
+        setForgotLoading(false);
+        return;
+      }
+
+      const forgotRes = await fetch(`${baseUrl}/admins/forgot-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: candidateEmail })
+      });
+
+      const forgotPayload = await forgotRes.json().catch(() => null);
+      if (!forgotRes.ok || !forgotPayload?.success) {
+        throw new Error(forgotPayload?.message || 'Unable to send reset instructions. Please try again later.');
+      }
+
+      setForgotMessage({ type: 'success', text: 'Password reset instructions have been emailed to you.' });
+    } catch (resetError) {
+      setForgotMessage({ type: 'error', text: resetError.message || 'Something went wrong. Please try again.' });
+    } finally {
+      setForgotLoading(false);
+    }
+  };
 
   return (
-    <div className="login-container">
-      <div className="login-card">
-        <div className="logo-section">
-          <div className="university-logo">
-            <div className="logo-shield">
-              <div className="shield-quarter yellow"></div>
-              <div className="shield-quarter red"></div>
-              <div className="shield-quarter green"></div>
-              <div className="shield-quarter blue"></div>
+    <div className="login-page">
+      <div className="login-wrapper">
+        <aside className="login-aside">
+          <div>
+            <div className="login-badge">
+              <ShieldCheck size={24} aria-hidden="true" />
+              <span>UMP Admin Portal</span>
             </div>
-          </div>
-          <h1 className="university-name">UNIVERSITY OF<br />MPUMALANGA</h1>
-          <div className="admin-section">
-            <h2>Admin</h2>
-            <p>UMP NAV-APP</p>
-          </div>
-        </div>
-
-        {/* --- NEW: Demo / hint area (UI-only; doesn't alter auth) --- */}
-        {/* --- 
-        <div className="demo-hint" style={{ margin: '0 16px 12px', fontSize: '13px', color: '#666' }}>
-          <strong>Demo admin:</strong> {DEMO_EMAIL} <span style={{ opacity: 0.85 }}>•</span> <em>password:</em> {DEMO_PASSWORD}
-          <div style={{ marginTop: 6 }}>
-            <small>Tip: this UI shows strength and a preview avatar when you type the demo email — purely cosmetic.</small>
-          </div>
-        </div> --- */}
-
-
-        <form onSubmit={handleSubmit} className="login-form">
-          {error && <div className="error-message">{error}</div>}
-
-          <div className="input-group">
-            <input
-              type="email"
-              placeholder="ADMIN EMAIL"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="login-input"
-              required
-              disabled={loading}
-            />
+            <h1>Lead your campus with confidence</h1>
+            <p>
+              Manage navigation data, coordinate building updates, and keep students informed from a
+              secure dashboard.
+            </p>
           </div>
 
-          <div className="input-group">
-            <input
-              type="password"
-              placeholder="PASSWORD"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="login-input"
-              required
-              disabled={loading}
-            />
-          </div>
+          <ul className="login-highlights">
+            <li>Modern security with automatic session timeouts</li>
+            <li>Access from any authorised device</li>
+            <li>Centralised admin tools in one place</li>
+          </ul>
+        </aside>
 
-          {/* --- NEW: Password strength bar (UI-only) --- */}
-          <div className="password-strength" style={{ padding: '0 6px 12px' }}>
-            <div style={{ fontSize: 12, marginBottom: 6, color: '#555' }}>
-              Password strength:
-              {' '}
-              {passwordStrength === 0 && <span style={{ opacity: 0.7 }}>Empty</span>}
-              {passwordStrength === 1 && <span>Weak</span>}
-              {passwordStrength === 2 && <span>Okay</span>}
-              {passwordStrength === 3 && <span>Good</span>}
-              {passwordStrength === 4 && <span>Strong</span>}
-            </div>
-            <div className="strength-bar" style={{ height: 6, background: '#eee', borderRadius: 6, overflow: 'hidden' }}>
-              <div
-                style={{
-                  width: `${(passwordStrength / 4) * 100}%`,
-                  height: '100%',
-                  transition: 'width 220ms ease',
-                  background: 'linear-gradient(90deg, rgba(0,0,0,0.12), rgba(0,0,0,0.08))'
-                }}
-              />
-            </div>
-          </div>
+        <main className="login-main">
+          <div className="login-card">
+            <header className="login-header">
+              <h2>Sign in</h2>
+              <p>Use your university administrator credentials to continue.</p>
+            </header>
 
-          <button type="submit" className="login-button" disabled={loading}>
-            {loading ? 'LOGGING IN...' : 'LOGIN'}
-          </button>
+            <form className="login-form" onSubmit={handleSubmit} noValidate>
+              {info && (
+                <div className="alert alert--info" role="status">
+                  {info}
+                </div>
+              )}
 
-          <div className="admin-notice">
-            <p>Access restricted to authorized administrators only</p>
-          </div>
-        </form>
+              {error && (
+                <div className="alert alert--error" role="alert">
+                  {error}
+                </div>
+              )}
 
-        {/* --- NEW: temporary confetti-like banner when localStorage shows authenticated (UI-only) --- */}
-        {showConfetti && (
-          <div className="confetti-banner" style={{
-            marginTop: 12,
-            padding: 10,
-            background: 'linear-gradient(90deg,#e6ffe6,#e6f7ff)',
-            borderRadius: 8,
-            textAlign: 'center',
-            fontWeight: 700
-          }}>
-            🎉 Login successful — redirecting...
-          </div>
-        )}
+              <div className="input-field">
+                <label htmlFor="admin-email">Email address</label>
+                <div className="input-wrapper">
+                  <Mail size={18} className="input-icon" aria-hidden="true" />
+                  <input
+                    id="admin-email"
+                    type="email"
+                    autoComplete="email"
+                    inputMode="email"
+                    placeholder="name.surname@ump.ac.za"
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                    disabled={loading}
+                    required
+                  />
+                </div>
+              </div>
 
-        <div style={{ marginTop: 12, padding: '0 12px 20px', fontSize: 12, color: '#777' }}>
-          <div>Welcome back to the UMP Admin Portal.</div>
-          <div style={{ marginTop: 6 }}>
-            Need an account? <a href="/register" style={{ color: '#1d4ed8', fontWeight: 600 }}>Register here</a>.
+              <div className="input-field">
+                <label htmlFor="admin-password">Password</label>
+                <div className="input-wrapper">
+                  <Lock size={18} className="input-icon" aria-hidden="true" />
+                  <input
+                    id="admin-password"
+                    type={showPassword ? 'text' : 'password'}
+                    autoComplete="current-password"
+                    placeholder="Enter your password"
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                    disabled={loading}
+                    required
+                  />
+                  <button
+                    type="button"
+                    className="toggle-password"
+                    onClick={togglePasswordVisibility}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    title={showPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+              </div>
+
+              <div className="login-actions">
+                <label className="remember-me">
+                  <input
+                    type="checkbox"
+                    checked={rememberMe}
+                    onChange={handleRememberMeChange}
+                    disabled={loading}
+                  />
+                  Remember me
+                </label>
+
+                <button
+                  type="button"
+                  className="link-button"
+                  onClick={handleForgotPassword}
+                >
+                  Forgot password?
+                </button>
+              </div>
+
+              <button type="submit" className="login-submit" disabled={loading}>
+                {loading ? 'Signing in…' : 'Sign in'}
+              </button>
+            </form>
+
+            <footer className="login-footer">
+              <p>
+                Need access?{' '}
+                <Link to="/register">
+                  Request an administrator account
+                </Link>
+              </p>
+              <small>Access is restricted to authorised university staff.</small>
+            </footer>
           </div>
-        </div>
+        </main>
       </div>
+
+      {forgotModalOpen && (
+        <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="forgot-password-title">
+          <div className="modal-card">
+            <button className="modal-close" type="button" onClick={closeForgotModal} aria-label="Close dialog">
+              <X size={20} />
+            </button>
+            <h3 id="forgot-password-title">Reset your password</h3>
+            <p className="modal-description">
+              Enter the email you use to sign in. We&apos;ll let you know if the account exists and send reset instructions.
+            </p>
+
+            {forgotMessage.text && (
+              <div className={`modal-alert modal-alert--${forgotMessage.type}`} role="alert">
+                {forgotMessage.text}
+              </div>
+            )}
+
+            <form className="modal-form" onSubmit={handleForgotSubmit}>
+              <label htmlFor="forgot-email">Email address</label>
+              <input
+                id="forgot-email"
+                type="email"
+                value={forgotEmail}
+                onChange={(event) => setForgotEmail(event.target.value)}
+                placeholder="name.surname@ump.ac.za"
+                disabled={forgotLoading}
+                required
+                autoFocus
+              />
+
+              <div className="modal-actions">
+                <button type="button" className="modal-button modal-button--ghost" onClick={closeForgotModal} disabled={forgotLoading}>
+                  Cancel
+                </button>
+                <button type="submit" className="modal-button" disabled={forgotLoading}>
+                  {forgotLoading ? 'Sending…' : 'Send reset link'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

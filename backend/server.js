@@ -69,12 +69,14 @@ const usersRouter = require('./routes/users');
 const adminsRouter = require('./routes/admins');
 const pathsRouter = require('./routes/paths');
 const dashboardRouter = require('./routes/dashboard');
+const notificationsRouter = require('./routes/notifications');
 
 app.use('/api/buildings', buildingsRouter);
 app.use('/api/users', usersRouter);
 app.use('/api/admins', adminsRouter);
 app.use('/api/paths', pathsRouter);
 app.use('/api/dashboard', dashboardRouter);
+app.use('/api/notifications', notificationsRouter);
 
 // Error handling middleware (must be last)
 app.use(notFound);
