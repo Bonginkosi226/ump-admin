@@ -3,7 +3,6 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import Dashboard from './pages/Dashboard';
 import Buildings from './pages/Buildings';
 import UploadPage from './pages/Upload_image';
-import MapPreview from './pages/MapPreview';
 import Settings from './pages/Settings';
 import PersonalInfo from './pages/PersonalInfo';
 import SecuritySettings from './pages/SecuritySettings';
@@ -38,7 +37,6 @@ function App() {
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="buildings" element={<Buildings />} />
             <Route path="coordinates" element={<Coordinates />} />
-            <Route path="map-preview" element={<MapPreview />} />
             <Route path="settings" element={<Settings />} />
             <Route path="personal-info" element={<PersonalInfo />} />
             <Route path="security-settings" element={<SecuritySettings />} />

@@ -1,16 +1,31 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Wrapper, Status } from '@googlemaps/react-wrapper';
 
-const MapComponent = ({ center, zoom, markers = [], onMapClick, className }) => {
+const MapComponent = ({
+  center,
+  zoom,
+  markers = [],
+  onMapClick,
+  onMarkerClick,
+  className,
+  mapTypeId,
+  minZoom,
+  maxZoom,
+  onIdle
+}) => {
   const ref = useRef(null);
   const [map, setMap] = useState(null);
-  const [mapMarkers, setMapMarkers] = useState([]);
+  const mapMarkersRef = useRef([]);
+  const idleListenerRef = useRef(null);
 
   useEffect(() => {
     if (ref.current && !map) {
       const newMap = new window.google.maps.Map(ref.current, {
         center,
         zoom,
+        mapTypeId: mapTypeId || 'roadmap',
+        minZoom,
+        maxZoom,
         mapTypeControl: true,
         streetViewControl: true,
         fullscreenControl: true,
@@ -39,48 +54,139 @@ const MapComponent = ({ center, zoom, markers = [], onMapClick, className }) => 
           });
         });
       }
+
+      if (onIdle) {
+        idleListenerRef.current = newMap.addListener('idle', () => {
+          const mapCenter = newMap.getCenter();
+          onIdle({
+            center: mapCenter ? { lat: mapCenter.lat(), lng: mapCenter.lng() } : null,
+            zoom: newMap.getZoom(),
+            bounds: newMap.getBounds()
+          });
+        });
+      }
     }
-  }, [ref, map, center, zoom, onMapClick]);
+  }, [ref, map, center, zoom, onMapClick, mapTypeId, minZoom, maxZoom, onIdle]);
 
   useEffect(() => {
-    if (map) {
-      // Clear existing markers
-      mapMarkers.forEach(marker => marker.setMap(null));
-      
-      // Add new markers
-      const newMarkers = markers.map(markerData => {
-        const marker = new window.google.maps.Marker({
-          position: { lat: markerData.lat, lng: markerData.lng },
-          map,
-          title: markerData.title || '',
-          icon: markerData.icon || {
-            url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="#ef4444"/>
-                <circle cx="12" cy="9" r="2.5" fill="white"/>
-              </svg>
-            `),
-            scaledSize: new window.google.maps.Size(24, 24),
-            anchor: new window.google.maps.Point(12, 24)
-          }
-        });
-        
-        if (markerData.infoWindow) {
-          const infoWindow = new window.google.maps.InfoWindow({
-            content: markerData.infoWindow
-          });
-          
-          marker.addListener('click', () => {
-            infoWindow.open(map, marker);
-          });
-        }
-        
-        return marker;
+    if (!map) return;
+
+    if (typeof mapTypeId === 'string' || typeof minZoom === 'number' || typeof maxZoom === 'number') {
+      map.setOptions({
+        mapTypeId: mapTypeId || map.getMapTypeId(),
+        minZoom,
+        maxZoom
       });
-      
-      setMapMarkers(newMarkers);
     }
-  }, [map, markers]);
+  }, [map, mapTypeId, minZoom, maxZoom]);
+
+  useEffect(() => {
+    if (!map || !center || typeof center.lat !== 'number' || typeof center.lng !== 'number') return;
+
+    const currentCenter = map.getCenter();
+    if (!currentCenter || currentCenter.lat() !== center.lat || currentCenter.lng() !== center.lng) {
+      map.panTo(center);
+    }
+  }, [map, center]);
+
+  useEffect(() => {
+    if (!map || typeof zoom !== 'number') return;
+    if (map.getZoom() !== zoom) {
+      map.setZoom(zoom);
+    }
+  }, [map, zoom]);
+
+  useEffect(() => {
+    if (!map) return;
+
+    // Clear existing markers
+    if (mapMarkersRef.current.length) {
+      mapMarkersRef.current.forEach(({ marker, infoWindow }) => {
+        infoWindow?.close();
+        marker.setMap(null);
+      });
+      mapMarkersRef.current = [];
+    }
+
+    if (!markers.length) return;
+
+    const buildMarkerIcon = (markerData) => {
+      const { iconUrl, color = '#ef4444', isSelected = false, label } = markerData;
+
+      if (iconUrl) {
+        const size = isSelected ? 52 : 44;
+        return {
+          url: iconUrl,
+          scaledSize: new window.google.maps.Size(size, size),
+          anchor: new window.google.maps.Point(size / 2, size / 2)
+        };
+      }
+
+      const size = isSelected ? 46 : 38;
+      const strokeWidth = isSelected ? 4 : 2;
+      const svg = `
+        <svg width="${size}" height="${size}" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M24 4C15.7157 4 9 10.7157 9 19C9 30.75 24 44 24 44C24 44 39 30.75 39 19C39 10.7157 32.2843 4 24 4Z" fill="${color}" stroke="${isSelected ? '#111827' : '#ffffff'}" stroke-width="${strokeWidth}"/>
+          <circle cx="24" cy="19" r="6" fill="#ffffff"/>
+          ${label ? `<text x="24" y="22.5" text-anchor="middle" font-family='Inter, sans-serif' font-size="10" fill="#111827" font-weight="600">${label}</text>` : ''}
+        </svg>
+      `;
+
+      return {
+        url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg),
+        scaledSize: new window.google.maps.Size(size, size),
+        anchor: new window.google.maps.Point(size / 2, size)
+      };
+    };
+
+    const createdMarkers = markers.map((markerData) => {
+      const marker = new window.google.maps.Marker({
+        position: { lat: markerData.lat, lng: markerData.lng },
+        map,
+        title: markerData.title || '',
+        icon: buildMarkerIcon(markerData)
+      });
+
+      let infoWindow = null;
+
+      if (markerData.infoWindow) {
+        infoWindow = new window.google.maps.InfoWindow({
+          content: markerData.infoWindow
+        });
+
+        marker.addListener('click', () => {
+          infoWindow.open(map, marker);
+        });
+
+        if (markerData.isSelected) {
+          infoWindow.open(map, marker);
+        }
+      }
+
+      if (onMarkerClick) {
+        marker.addListener('click', () => {
+          onMarkerClick(markerData.payload ?? markerData);
+        });
+      }
+
+      return { marker, infoWindow };
+    });
+
+    mapMarkersRef.current = createdMarkers;
+  }, [map, markers, onMarkerClick]);
+
+  useEffect(() => () => {
+    if (idleListenerRef.current) {
+      idleListenerRef.current.remove();
+    }
+    if (mapMarkersRef.current.length) {
+      mapMarkersRef.current.forEach(({ marker, infoWindow }) => {
+        infoWindow?.close();
+        marker.setMap(null);
+      });
+      mapMarkersRef.current = [];
+    }
+  }, []);
 
   return <div ref={ref} className={className} style={{ width: '100%', height: '100%' }} />;
 };
@@ -116,7 +222,19 @@ const render = (status) => {
   }
 };
 
-const GoogleMap = ({ center, zoom, markers, onMapClick, className, apiKey }) => {
+const GoogleMap = ({
+  center,
+  zoom,
+  markers,
+  onMapClick,
+  onMarkerClick,
+  className,
+  apiKey,
+  mapTypeId,
+  minZoom,
+  maxZoom,
+  onIdle
+}) => {
   // Default to University of Mpumalanga coordinates if no center provided
   const defaultCenter = { lat: -25.4284, lng: 30.9781 };
   const mapCenter = center || defaultCenter;
@@ -134,7 +252,12 @@ const GoogleMap = ({ center, zoom, markers, onMapClick, className, apiKey }) => 
         zoom={mapZoom}
         markers={markers}
         onMapClick={onMapClick}
+        onMarkerClick={onMarkerClick}
         className={className}
+        mapTypeId={mapTypeId}
+        minZoom={minZoom}
+        maxZoom={maxZoom}
+        onIdle={onIdle}
       />
     </Wrapper>
   );
