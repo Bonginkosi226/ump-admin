@@ -96,6 +96,10 @@ const buildingSchema = new mongoose.Schema({
     trim: true,
     maxlength: [500, 'Description cannot exceed 500 characters']
   },
+  icon: {
+    type: String,
+    trim: true
+  },
   images: [{
     url: {
       type: String,
