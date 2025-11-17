@@ -3,24 +3,62 @@ import { useNavigate } from 'react-router-dom';
 import './Buildings.css';
 import { campusFetch } from '../services/campusApi';
 
+const createImageStatus = () => ({
+  uploading: false,
+  error: null,
+  success: false
+});
+
 const Buildings = () => {
   const navigate = useNavigate();
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [selectedBuilding, setSelectedBuilding] = useState(null);
+  const [viewBuilding, setViewBuilding] = useState(null);
   const [editFormData, setEditFormData] = useState({});
-  const [addFormData, setAddFormData] = useState({
+  const initialAddFormState = {
     name: '',
     description: '',
     distance: '',
     contact: '',
     operatingHours: '8:00 AM - 5:00 PM',
     icon: null
-  });
+  };
+  const [addFormData, setAddFormData] = useState(initialAddFormState);
   const [buildings, setBuildings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [addStep, setAddStep] = useState(1);
+  const [addImageStatus, setAddImageStatus] = useState(createImageStatus());
+  const [editImageStatus, setEditImageStatus] = useState(createImageStatus());
+
+  const resetAddState = () => {
+    setAddFormData(initialAddFormState);
+    setAddStep(1);
+    setAddImageStatus(createImageStatus());
+  };
+
+  const openAddModal = () => {
+    resetAddState();
+    setShowAddModal(true);
+  };
+
+  const closeAddModal = () => {
+    setShowAddModal(false);
+    resetAddState();
+  };
+
+  const resetEditState = () => {
+    setEditFormData({});
+    setSelectedBuilding(null);
+    setEditImageStatus(createImageStatus());
+  };
+
+  const closeEditModal = () => {
+    setShowEditModal(false);
+    resetEditState();
+  };
 
   // Fetch buildings + images
   useEffect(() => {
@@ -79,43 +117,100 @@ const Buildings = () => {
       distance: building.distance || '',
       contact: (building.contact && typeof building.contact === 'object' ? building.contact.phone : building.contact) || '',
       operatingHours: building.operatingHours || building.hours || '8:00 AM - 5:00 PM',
-      icon: building.icon || null,
-      iconFile: null
+      icon: building.icon || null
     });
+    setEditImageStatus(createImageStatus());
     setShowEditModal(true);
   };
 
-  // Handle image upload for EDIT
-  const handleEditInputChange = async (e) => {
-    const { name, value, files } = e.target;
-    if (name === 'icon' && files && files[0]) {
-      const file = files[0];
-      console.log('Selected file:', file);
-      const reader = new FileReader();
-      reader.onloadend = async () => {
-        const base64 = reader.result.split(',')[1];
-        try {
-          const res = await campusFetch('/upload', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ image: base64 }),
-          });
-          const data = await res.json();
-          console.log('Upload response:', data);
-          if (data.url) {
-            setEditFormData(prev => ({ ...prev, icon: data.url, iconFile: null }));
-          } else {
-            alert('Image upload failed: ' + (data.error || 'Unknown error'));
-          }
-        } catch (err) {
-          console.error('Image upload error:', err);
-          alert('Image upload error: ' + err.message);
-        }
-      };
-      reader.readAsDataURL(file);
-    } else {
-      setEditFormData(prev => ({ ...prev, [name]: value }));
+  const uploadImageToCloudinary = async (file, setStatus) => {
+    setStatus(prev => ({ ...prev, uploading: true, error: null, success: false }));
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('upload_preset', import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET);
+    if (import.meta.env.VITE_CLOUDINARY_UPLOAD_FOLDER) {
+      formData.append('folder', import.meta.env.VITE_CLOUDINARY_UPLOAD_FOLDER);
     }
+
+    const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
+    if (!cloudName) {
+      const message = 'Cloudinary cloud name is not configured';
+      setStatus({ uploading: false, error: message, success: false });
+      throw new Error(message);
+    }
+
+    try {
+      const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
+        method: 'POST',
+        body: formData
+      });
+
+      const data = await response.json();
+      if (!response.ok || !data?.secure_url) {
+        throw new Error(data?.error?.message || 'Image upload failed');
+      }
+
+      setStatus({ uploading: false, error: null, success: true });
+      return data.secure_url;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Image upload failed';
+      setStatus({ uploading: false, error: message, success: false });
+      throw error;
+    }
+  };
+
+  const handleAddImageSelect = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      const url = await uploadImageToCloudinary(file, setAddImageStatus);
+      setAddFormData((prev) => ({ ...prev, icon: url }));
+    } catch (error) {
+      console.error('Add image upload failed:', error);
+    } finally {
+      event.target.value = '';
+    }
+  };
+
+  const handleEditImageSelect = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      const url = await uploadImageToCloudinary(file, setEditImageStatus);
+      setEditFormData((prev) => ({ ...prev, icon: url }));
+    } catch (error) {
+      console.error('Edit image upload failed:', error);
+    } finally {
+      event.target.value = '';
+    }
+  };
+
+  const handleAddDetailsChange = (event) => {
+    const { name, value } = event.target;
+    setAddFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleEditDetailsChange = (event) => {
+    const { name, value } = event.target;
+    setEditFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const clearAddImage = () => {
+    setAddFormData((prev) => ({ ...prev, icon: null }));
+    setAddImageStatus(createImageStatus());
+  };
+
+  const clearEditImage = () => {
+    setEditFormData((prev) => ({ ...prev, icon: null }));
+    setEditImageStatus(createImageStatus());
+  };
+
+  const canAdvanceAdd = Boolean(addFormData.icon) && addImageStatus.success && !addImageStatus.uploading;
+
+  // Handle image upload for EDIT
+  const handleEditInputChange = (e) => {
+    const { name, value } = e.target;
+    setEditFormData(prev => ({ ...prev, [name]: value }));
   };
 
   const handleEditSubmit = async (e) => {
@@ -123,25 +218,8 @@ const Buildings = () => {
     if (!selectedBuilding) return;
   
     try {
-      let iconUrl = editFormData.icon;
-  
-      // Upload new image if selected
-      if (editFormData.iconFile) {
-        const formData = new FormData();
-        formData.append('image', editFormData.iconFile);
-        const uploadRes = await campusFetch('/uploads', { method: 'POST', body: formData });
-        if (!uploadRes.ok) throw new Error('Image upload failed');
-        const uploadData = await uploadRes.json();
-        iconUrl = uploadData.url;
-  
-        // Update 'links' collection
-        await campusFetch('/links', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: editFormData.name, imageurl: iconUrl })
-        });
-      }
-  
+      const iconUrl = editFormData.icon;
+
       const rawId = selectedBuilding._id || selectedBuilding.id || selectedBuilding.providedid;
       const id = String(rawId || '').trim();
       if (!id) {
@@ -161,6 +239,11 @@ const Buildings = () => {
       };
       if (iconUrl) {
         payload.icon = iconUrl;
+        await campusFetch('/links', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: editFormData.name, imageurl: iconUrl })
+        });
       }
   
       // Verify the building exists on the remote API
@@ -236,57 +319,12 @@ const Buildings = () => {
     }
   };
 
-  // ADD BUILDING
-  // Handle image upload for ADD
-  const handleAddInputChange = async (e) => {
-    const { name, value, files } = e.target;
-    if (name === 'icon' && files && files[0]) {
-      const file = files[0];
-      console.log('Selected file:', file);
-      const reader = new FileReader();
-      reader.onloadend = async () => {
-        const base64 = reader.result.split(',')[1];
-        try {
-          const res = await campusFetch('/upload', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ image: base64 }),
-          });
-          const data = await res.json();
-          console.log('Upload response:', data);
-          if (data.url) {
-            setAddFormData(prev => ({ ...prev, icon: data.url }));
-          } else {
-            alert('Image upload failed: ' + (data.error || 'Unknown error'));
-          }
-        } catch (err) {
-          console.error('Image upload error:', err);
-          alert('Image upload error: ' + err.message);
-        }
-      };
-      reader.readAsDataURL(file);
-    } else {
-      setAddFormData(prev => ({ ...prev, [name]: value }));
-    }
-  };
-
   const handleAddSubmit = async e => {
     e.preventDefault();
     try {
-      let imageUrl = null;
+      const imageUrl = addFormData.icon;
 
-      // 1️⃣ Upload image if exists
-      if (addFormData.icon) {
-        const formData = new FormData();
-        formData.append('image', addFormData.icon);
-
-        const uploadRes = await campusFetch('/uploads', { method: 'POST', body: formData });
-        if (!uploadRes.ok) throw new Error('Image upload failed');
-        const uploadData = await uploadRes.json();
-        imageUrl = uploadData.url;
-      }
-
-      // 2️⃣ Create building
+      // 1️⃣ Create building
       const response = await campusFetch('/buildings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -319,7 +357,7 @@ const Buildings = () => {
         updatedAt: createdBuilding.updatedAt ?? new Date().toISOString(),
       };
 
-      // 3️⃣ Save image URL in 'links'
+      // 2️⃣ Save image URL in 'links'
       if (imageUrl) {
         await campusFetch('/links', {
           method: 'POST',
@@ -328,10 +366,10 @@ const Buildings = () => {
         });
       }
 
-      // 4️⃣ Update local state with server-provided metadata (timestamps)
+      // 3️⃣ Update local state with server-provided metadata (timestamps)
       setBuildings(prev => [...prev, normalizedBuilding]);
 
-      // 5️⃣ Reset form
+      // 4️⃣ Reset form
       setAddFormData({
         name: '',
         description: '',
@@ -419,14 +457,23 @@ const Buildings = () => {
                 <div className="col-hours">{building.operatingHours || building.hours}</div>
                 <div className="col-action">
                   <button 
+                    type="button"
                     className="action-btn edit" 
                     onClick={() => handleEdit(building)}
                     title="Edit building"
                   >
                     ✏️
                   </button>
-                  <button className="action-btn view" title="View building">👁️</button>
+                  <button
+                    type="button"
+                    className="action-btn view"
+                    title="View building"
+                    onClick={() => setViewBuilding(building)}
+                  >
+                    👁️
+                  </button>
                   <button 
+                    type="button"
                     className="action-btn delete" 
                     onClick={() => handleDelete(building)}
                     title="Delete building"
@@ -441,103 +488,169 @@ const Buildings = () => {
 
         <button 
           className="add-building-btn"
-          onClick={() => setShowAddModal(true)}
+          onClick={openAddModal}
         >
           ADD NEW BUILDING
         </button>
       </div>
 
       {showAddModal && (
-        <div className="modal-overlay" onClick={() => setShowAddModal(false)}>
+        <div className="modal-overlay" onClick={closeAddModal}>
           <div className="add-building-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h2>🏢 Add Building</h2>
-              <button className="close-btn" onClick={() => setShowAddModal(false)}>
+              <button className="close-btn" onClick={closeAddModal}>
                 ❌
               </button>
             </div>
-            
-            <form className="add-building-form" onSubmit={handleAddSubmit}>
-              <div className="form-group">
-                <label>Building Name</label>
-                <input 
-                  type="text" 
-                  name="name"
-                  value={addFormData.name}
-                  onChange={handleAddInputChange}
-                  placeholder="Building name" 
-                  required
-                />
-              </div>
-              
-              <div className="form-group">
-                <label>Description</label>
-                <textarea 
-                  name="description"
-                  value={addFormData.description}
-                  onChange={handleAddInputChange}
-                  placeholder="Describe the building..."
-                  rows="3"
-                  required
-                ></textarea>
-              </div>
-              
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Distance</label>
-                  <input 
-                    type="text" 
-                    name="distance"
-                    value={addFormData.distance}
-                    onChange={handleAddInputChange}
-                    placeholder="e.g., 3km" 
-                  />
+
+            <div className="modal-body">
+              <div className="stepper">
+                <div className={`step ${addStep === 1 ? 'active' : addStep > 1 ? 'completed' : ''}`}>
+                  <span>1</span>
+                  <p>Upload Image</p>
                 </div>
-                <div className="form-group">
-                  <label>Contact</label>
-                  <input 
-                    type="text" 
-                    name="contact"
-                    value={addFormData.contact}
-                    onChange={handleAddInputChange}
-                    placeholder="e.g., 013 002 000" 
-                  />
+                <div className={`step ${addStep === 2 ? 'active' : addStep > 2 ? 'completed' : ''}`}>
+                  <span>2</span>
+                  <p>Building Details</p>
                 </div>
-              </div>
-              
-              <div className="form-group">
-                <label>Operating Hours</label>
-                <input 
-                  type="text" 
-                  name="operatingHours"
-                  value={addFormData.operatingHours}
-                  onChange={handleAddInputChange}
-                  placeholder="e.g., 8:00 AM - 5:00 PM" 
-                />
-              </div>
-              
-              <div className="form-group">
-                <label>Building Image</label>
-                {addFormData.icon && (
-                  <img src={addFormData.icon} alt="Preview" style={{width: '100px', height: '100px', objectFit: 'cover', marginBottom: '10px'}}/>
-                )}
-                <input
-                  type="file"
-                  name="icon"
-                  onChange={handleAddInputChange}
-                  accept="image/*"
-                />
               </div>
 
-              <div className="form-actions">
-                <button type="button" className="cancel-btn" onClick={() => setShowAddModal(false)}>
-                  Cancel
-                </button>
-                <button type="submit" className="save-btn">
-                  Add Building
-                </button>
-              </div>
-            </form>
+              {addStep === 1 ? (
+                <div className="step-pane">
+                  <div className="upload-card">
+                    <div className="upload-preview">
+                      {addFormData.icon ? (
+                        <img src={addFormData.icon} alt="Building preview" />
+                      ) : (
+                        <div className="upload-placeholder">
+                          <span role="img" aria-label="image">🖼️</span>
+                          <p>Select an image to begin</p>
+                        </div>
+                      )}
+                      {addFormData.icon && (
+                        <button type="button" className="remove-image-btn" onClick={clearAddImage}>
+                          ✕
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="upload-actions">
+                      <label className="upload-button">
+                        <input type="file" accept="image/*" onChange={handleAddImageSelect} hidden />
+                        {addFormData.icon ? 'Replace image' : 'Choose image'}
+                      </label>
+                      <p className="upload-hint">We’ll store the Cloudinary link for this building.</p>
+                    </div>
+
+                    <div className="upload-status">
+                      {addImageStatus.uploading && <p className="info">Uploading to Cloudinary…</p>}
+                      {addImageStatus.success && !addImageStatus.uploading && <p className="success">Image uploaded successfully.</p>}
+                      {addImageStatus.error && <p className="error">{addImageStatus.error}</p>}
+                    </div>
+                  </div>
+
+                  <div className="step-actions">
+                    <button type="button" className="cancel-btn" onClick={closeAddModal}>Cancel</button>
+                    <button
+                      type="button"
+                      className="primary-btn"
+                      onClick={() => setAddStep(2)}
+                      disabled={!canAdvanceAdd}
+                    >
+                      Continue
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <form className="add-building-form" onSubmit={handleAddSubmit}>
+                  <div className="step-pane">
+                    {addFormData.icon && (
+                      <div className="uploaded-summary">
+                        <img src={addFormData.icon} alt="Building" />
+                        <div>
+                          <p className="label">Image link</p>
+                          <a href={addFormData.icon} target="_blank" rel="noreferrer">View on Cloudinary</a>
+                        </div>
+                        <button type="button" className="link-button" onClick={() => {
+                          setAddImageStatus(createImageStatus());
+                          setAddStep(1);
+                        }}>
+                          Change image
+                        </button>
+                      </div>
+                    )}
+
+                    <div className="form-group">
+                      <label>Building Name</label>
+                      <input
+                        type="text"
+                        name="name"
+                        value={addFormData.name}
+                        onChange={handleAddDetailsChange}
+                        placeholder="Building name"
+                        required
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label>Description</label>
+                      <textarea
+                        name="description"
+                        value={addFormData.description}
+                        onChange={handleAddDetailsChange}
+                        placeholder="Describe the building..."
+                        rows="3"
+                        required
+                      ></textarea>
+                    </div>
+
+                    <div className="form-row">
+                      <div className="form-group">
+                        <label>Distance</label>
+                        <input
+                          type="text"
+                          name="distance"
+                          value={addFormData.distance}
+                          onChange={handleAddDetailsChange}
+                          placeholder="e.g., 3km"
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label>Contact</label>
+                        <input
+                          type="text"
+                          name="contact"
+                          value={addFormData.contact}
+                          onChange={handleAddDetailsChange}
+                          placeholder="e.g., 013 002 000"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="form-group">
+                      <label>Operating Hours</label>
+                      <input 
+                        type="text" 
+                        name="operatingHours"
+                        value={addFormData.operatingHours}
+                        onChange={handleAddDetailsChange}
+                        placeholder="e.g., 8:00 AM - 5:00 PM" 
+                      />
+                    </div>
+
+                    <div className="form-actions">
+                      <button type="button" className="cancel-btn" onClick={closeAddModal}>
+                        Cancel
+                      </button>
+                      <button type="submit" className="save-btn" disabled={!addFormData.icon}>
+                        Add Building
+                      </button>
+                    </div>
+                  </div>
+                </form>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -559,7 +672,7 @@ const Buildings = () => {
                   type="text" 
                   name="name"
                   value={editFormData.name || ''}
-                  onChange={handleEditInputChange}
+                  onChange={handleEditDetailsChange}
                   placeholder="Building name" 
                   required
                 />
@@ -570,7 +683,7 @@ const Buildings = () => {
                 <textarea 
                   name="description"
                   value={editFormData.description || ''}
-                  onChange={handleEditInputChange}
+                  onChange={handleEditDetailsChange}
                   placeholder="Describe the building..."
                   rows="3"
                   required
@@ -584,7 +697,7 @@ const Buildings = () => {
                     type="text" 
                     name="distance"
                     value={editFormData.distance || ''}
-                    onChange={handleEditInputChange}
+                    onChange={handleEditDetailsChange}
                     placeholder="e.g., 3km" 
                   />
                 </div>
@@ -594,7 +707,7 @@ const Buildings = () => {
                     type="text" 
                     name="contact"
                     value={editFormData.contact || ''}
-                    onChange={handleEditInputChange}
+                    onChange={handleEditDetailsChange}
                     placeholder="e.g., 013 002 000" 
                   />
                 </div>
@@ -621,7 +734,7 @@ const Buildings = () => {
                 <input
                   type="file"
                   name="icon"
-                  onChange={handleEditInputChange}
+                  onChange={handleEditImageSelect}
                   accept="image/*"
                 />
               </div>

@@ -6,6 +6,9 @@ const mongoSanitize = require('express-mongo-sanitize');
 const hpp = require('hpp');
 const { sanitizeInput, rateLimits, securityHeaders } = require('./middleware/security');
 const { errorHandler, notFound } = require('./middleware/errorHandler');
+const cloudinary = require('cloudinary').v2;
+const multer = require('multer');
+const streamifier = require('streamifier');
 require('dotenv').config();
 
 const app = express();
@@ -77,6 +80,40 @@ app.use('/api/admins', adminsRouter);
 app.use('/api/paths', pathsRouter);
 app.use('/api/dashboard', dashboardRouter);
 app.use('/api/notifications', notificationsRouter);
+
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
+});
+
+const upload = multer({ storage: multer.memoryStorage() });
+
+app.post('/api/upload-image', upload.single('image'), async (req, res, next) => {
+  if (!req.file) {
+    return res.status(400).json({ success: false, message: 'No image file provided' });
+  }
+
+  try {
+    const streamUpload = () => new Promise((resolve, reject) => {
+      const uploadOptions = {
+        folder: process.env.CLOUDINARY_UPLOAD_FOLDER || 'building_images',
+        upload_preset: process.env.CLOUDINARY_UPLOAD_PRESET
+      };
+
+      const stream = cloudinary.uploader.upload_stream(uploadOptions, (error, result) => {
+        if (error) return reject(error);
+        resolve(result);
+      });
+      streamifier.createReadStream(req.file.buffer).pipe(stream);
+    });
+
+    const result = await streamUpload();
+    res.json({ success: true, url: result.secure_url, public_id: result.public_id });
+  } catch (error) {
+    next(error);
+  }
+});
 
 // Error handling middleware (must be last)
 app.use(notFound);

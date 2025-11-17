@@ -1,18 +1,18 @@
 import React, { useState } from "react";
+import { campusUploadFormData } from "../services/campusApi";
 
 const UploadPage = () => {
-  const [file, setFile] = useState(null);
+  const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-/** 
-  const handleFileChange = (e) => {
-    setFile(e.target.files[0]);
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selected = e.target.files?.[0] ?? null;
+    setFile(selected);
     setImageUrl(null);
     setError(null);
   };
-  */
 
   const handleUpload = async () => {
     if (!file) return setError('Please select a file first');
@@ -21,21 +21,15 @@ const UploadPage = () => {
     setError(null);
 
     const formData = new FormData();
-    formData.append("icon", file);
+    formData.append("image", file);
 
     try {
-      const res = await fetch("/api/upload", {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!res.ok) throw new Error(`Upload failed: ${res.statusText}`);
-
-      const data = await res.json();
+      const data = await campusUploadFormData('/upload-image', formData);
       setImageUrl(data.url);
     } catch (err) {
       console.error(err);
-      //setError(err.message || "Upload failed");
+      const message = err instanceof Error ? err.message : 'Upload failed';
+      setError(message);
     } finally {
       setUploading(false);
     }
@@ -45,7 +39,7 @@ const UploadPage = () => {
     <div style={{ padding: "2rem", fontFamily: "sans-serif" }}>
       <h1>Upload an Image</h1>
 
-      {/* <input type="file" onChange={handleFileChange} accept="image/*" /> */}
+      <input type="file" onChange={handleFileChange} accept="image/*" />
       <button onClick={handleUpload} disabled={uploading} style={{ marginLeft: "1rem" }}>
         {uploading ? "Uploading..." : "Upload"}
       </button>

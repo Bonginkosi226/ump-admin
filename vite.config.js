@@ -25,6 +25,11 @@ export default defineConfig({
         changeOrigin: true,
         secure: true
       },
+      '/api/upload-image': {
+        target: 'http://localhost:5000',
+        changeOrigin: true,
+        secure: false
+      },
       '/api/upload': {
         target: 'https://campus-api-cuut.vercel.app',
         changeOrigin: true,
